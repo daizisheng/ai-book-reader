@@ -24,6 +24,34 @@
             left: 0;
             right: 0;
             z-index: 1000;
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            padding-right: 10px;
+        }
+
+        .smart-button {
+            -webkit-app-region: no-drag;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 4px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            margin-right: 10px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .smart-button:hover {
+            background-color: #45a049;
+        }
+
+        .smart-button svg {
+            width: 14px;
+            height: 14px;
         }
 
         .main-content {
@@ -73,7 +101,14 @@
     </style>
 </head>
 <body>
-    <div class="titlebar"></div>
+    <div class="titlebar">
+        <button class="smart-button" id="smartButton">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+            </svg>
+            Smart
+        </button>
+    </div>
     <div class="main-content">
         <div class="left-panel">
             <webview id="leftWebview" src="about:blank"></webview>
