@@ -27,9 +27,26 @@ if (!fs.existsSync(dataDir)) {
     fs.mkdirSync(dataDir, { recursive: true });
 }
 
+// 创建 Chrome 数据目录
+const chromeDataDir = path.join(dataDir, 'chrome-data');
+if (!fs.existsSync(chromeDataDir)) {
+    fs.mkdirSync(chromeDataDir, { recursive: true });
+}
+
 // 设置应用的用户数据目录
-app.setPath('userData', dataDir);
+app.setPath('userData', chromeDataDir);
 console.log('User data path:', app.getPath('userData'));
+
+// 设置其他会话相关目录
+app.setPath('sessionData', chromeDataDir);
+app.setPath('cache', path.join(chromeDataDir, 'Cache'));
+app.setPath('userCache', path.join(chromeDataDir, 'Cache'));
+app.setPath('crashDumps', path.join(chromeDataDir, 'Crashpad'));
+app.setPath('blobStorage', path.join(chromeDataDir, 'blob_storage'));
+app.setPath('codeCache', path.join(chromeDataDir, 'Code Cache'));
+app.setPath('gpuCache', path.join(chromeDataDir, 'GPUCache'));
+app.setPath('localStorage', path.join(chromeDataDir, 'Local Storage'));
+app.setPath('sessionStorage', path.join(chromeDataDir, 'Session Storage'));
 
 // 创建配置存储，指定数据目录
 const store = new Store({
@@ -209,15 +226,6 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
-    // 创建 Chrome 数据目录
-    const chromeDataDir = path.join(dataDir, 'chrome-data');
-    console.log('Chrome data path:', chromeDataDir);
-    
-    // 确保 Chrome 数据目录存在
-    if (!fs.existsSync(chromeDataDir)) {
-        fs.mkdirSync(chromeDataDir, { recursive: true });
-    }
-
     // 创建共享的持久化会话
     persistentSession = session.fromPartition('persist:shared', {
         cache: true,
