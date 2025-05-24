@@ -4,38 +4,38 @@ const Store = require('electron-store');
 const os = require('os');
 const fs = require('fs');
 
+// 在应用启动前设置用户数据目录
+const dataDir = path.join(os.homedir(), '.ai-book-reader');
+const chromeDataDir = path.join(dataDir, 'chrome-data');
+
+// 设置整个 Electron 应用的数据目录
+app.setPath('userData', chromeDataDir);
+
+// 确保数据目录存在并设置正确的权限
+if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true, mode: 0o755 });
+}
+if (!fs.existsSync(chromeDataDir)) {
+    fs.mkdirSync(chromeDataDir, { recursive: true, mode: 0o755 });
+}
+
+// 设置 Chrome 数据目录
+app.commandLine.appendSwitch('user-data-dir', chromeDataDir);
+app.commandLine.appendSwitch('no-sandbox');
+app.commandLine.appendSwitch('disable-gpu');
+
+console.log('Chrome data directory:', chromeDataDir);
+
 // 解析命令行参数
 const args = process.argv.slice(1);
-let dataDir = path.join(os.homedir(), '.ai-book-reader');
 let enableDebug = false;
 
-// 查找 --data-dir 或 -d 参数
+// 查找 --enable-debug 参数
 for (let i = 0; i < args.length; i++) {
-    if (args[i] === '--data-dir' || args[i] === '-d') {
-        if (i + 1 < args.length) {
-            dataDir = args[i + 1];
-            break;
-        }
-    }
     if (args[i] === '--enable-debug') {
         enableDebug = true;
     }
 }
-
-// 确保数据目录存在
-if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true });
-}
-
-// 创建 Chrome 数据目录
-const chromeDataDir = path.join(dataDir, 'chrome-data');
-if (!fs.existsSync(chromeDataDir)) {
-    fs.mkdirSync(chromeDataDir, { recursive: true });
-}
-
-// 在应用启动前设置用户数据目录
-app.commandLine.appendSwitch('user-data-dir', chromeDataDir);
-console.log('Chrome data directory:', chromeDataDir);
 
 // 创建配置存储，指定数据目录
 const store = new Store({
@@ -45,32 +45,6 @@ const store = new Store({
 
 let persistentSession;
 let mainWindow;
-
-// 从 Chrome 复制 cookies
-async function copyChromeCookies() {
-    const chromeCookiesPath = path.join(os.homedir(), 'Library/Application Support/Google/Chrome/Default/Cookies');
-    if (fs.existsSync(chromeCookiesPath)) {
-        try {
-            const defaultSession = session.defaultSession;
-            const cookies = await defaultSession.cookies.get({});
-            for (const cookie of cookies) {
-                await persistentSession.cookies.set({
-                    url: cookie.url || `http${cookie.secure ? 's' : ''}://${cookie.domain}${cookie.path}`,
-                    name: cookie.name,
-                    value: cookie.value,
-                    domain: cookie.domain,
-                    path: cookie.path,
-                    secure: cookie.secure,
-                    httpOnly: cookie.httpOnly,
-                    expirationDate: cookie.expirationDate
-                });
-            }
-            console.log('Successfully copied cookies from Chrome');
-        } catch (error) {
-            console.error('Error copying cookies:', error);
-        }
-    }
-}
 
 function createWindow() {
     mainWindow = new BrowserWindow({
@@ -231,8 +205,8 @@ app.whenReady().then(async () => {
         }
     });
 
-    // 复制 Chrome cookies
-    await copyChromeCookies();
+    // 设置会话数据持久化
+    await persistentSession.setPreloads([path.join(__dirname, 'preload.js')]);
     
     createWindow();
 
@@ -258,8 +232,11 @@ app.on('before-quit', () => {
 
 // 确保应用完全退出
 app.on('will-quit', (event) => {
-    // 清理所有会话
+    // 保留登录状态，只清理临时数据
     if (persistentSession) {
-        persistentSession.clearStorageData();
+        persistentSession.clearStorageData({
+            storages: ['cache', 'shadercache', 'websql', 'serviceworkers'],
+            quotas: ['temporary']
+        });
     }
 }); 

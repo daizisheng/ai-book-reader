@@ -14,6 +14,29 @@ const rightWebview = document.getElementById('rightWebview');
     // 设置两个 webview 共享同一个持久化会话
     webview.setAttribute('partition', 'persist:shared');
     webview.setAttribute('useragent', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
+    
+    // 监听 console 消息
+    webview.addEventListener('console-message', (event) => {
+        const { level, message, line, sourceId } = event;
+        const prefix = `[${webview.id}]`;
+        
+        switch (level) {
+            case 0:
+                console.log(prefix, message);
+                break;
+            case 1:
+                console.warn(prefix, message);
+                break;
+            case 2:
+                console.error(prefix, message);
+                break;
+            case 3:
+                console.debug(prefix, message);
+                break;
+            default:
+                console.log(prefix, message);
+        }
+    });
 });
 
 // 标记是否已加载过 ChatGPT
