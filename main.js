@@ -218,31 +218,10 @@ app.whenReady().then(async () => {
         fs.mkdirSync(chromeDataDir, { recursive: true });
     }
 
-    // 设置会话存储路径
-    const sessionStoragePath = path.join(chromeDataDir, 'Session Storage');
-    const localStoragePath = path.join(chromeDataDir, 'Local Storage');
-    const cachePath = path.join(chromeDataDir, 'Cache');
-    const cookiesPath = path.join(chromeDataDir, 'Cookies');
-    
-    // 确保所有子目录存在
-    [sessionStoragePath, localStoragePath, cachePath, cookiesPath].forEach(dir => {
-        if (!fs.existsSync(dir)) {
-            fs.mkdirSync(dir, { recursive: true });
-        }
-    });
-    
     // 创建共享的持久化会话
     persistentSession = session.fromPartition('persist:shared', {
         cache: true,
         path: chromeDataDir
-    });
-
-    // 设置会话存储路径
-    await persistentSession.setStorageAccessSync({
-        sessionStorage: sessionStoragePath,
-        localStorage: localStoragePath,
-        cache: cachePath,
-        cookies: cookiesPath
     });
 
     // 设置会话持久化
