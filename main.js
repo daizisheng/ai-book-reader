@@ -34,12 +34,8 @@ if (!fs.existsSync(chromeDataDir)) {
 }
 
 // 在应用启动前设置用户数据目录
-if (app.isPackaged) {
-    app.setPath('userData', chromeDataDir);
-} else {
-    // 开发模式下，使用命令行参数
-    app.commandLine.appendSwitch('user-data-dir', chromeDataDir);
-}
+app.commandLine.appendSwitch('user-data-dir', chromeDataDir);
+console.log('Chrome data directory:', chromeDataDir);
 
 // 创建配置存储，指定数据目录
 const store = new Store({
@@ -219,13 +215,6 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
-    // 验证用户数据目录设置
-    console.log('User data path:', app.getPath('userData'));
-    console.log('Session path:', app.getPath('sessionData'));
-    console.log('Cache path:', app.getPath('cache'));
-    console.log('Local storage path:', app.getPath('localStorage'));
-    console.log('Session storage path:', app.getPath('sessionStorage'));
-
     // 创建共享的持久化会话
     persistentSession = session.fromPartition('persist:shared', {
         cache: true,
