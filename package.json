@@ -5,7 +5,7 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "dev": "electron . --debug"
+    "dev": "electron . --enable-debug"
   },
   "author": "",
   "license": "ISC",
@@ -13,6 +13,7 @@
     "electron": "^28.1.0"
   },
   "dependencies": {
-    "electron-store": "^8.1.0"
+    "electron-store": "^8.1.0",
+    "yargs": "^17.7.2"
   }
-} 
+}
