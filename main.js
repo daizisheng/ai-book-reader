@@ -7,6 +7,7 @@ const fs = require('fs');
 // 解析命令行参数
 const args = process.argv.slice(1);
 let dataDir = path.join(os.homedir(), '.ai-book-reader');
+let enableDebug = false;
 
 // 查找 --data-dir 或 -d 参数
 for (let i = 0; i < args.length; i++) {
@@ -16,12 +17,19 @@ for (let i = 0; i < args.length; i++) {
             break;
         }
     }
+    if (args[i] === '--enable-debug') {
+        enableDebug = true;
+    }
 }
 
 // 确保数据目录存在
 if (!fs.existsSync(dataDir)) {
     fs.mkdirSync(dataDir, { recursive: true });
 }
+
+// 设置应用的用户数据目录
+app.setPath('userData', dataDir);
+console.log('User data path:', app.getPath('userData'));
 
 // 创建配置存储，指定数据目录
 const store = new Store({
@@ -32,6 +40,32 @@ const store = new Store({
 let persistentSession;
 let mainWindow;
 
+// 从 Chrome 复制 cookies
+async function copyChromeCookies() {
+    const chromeCookiesPath = path.join(os.homedir(), 'Library/Application Support/Google/Chrome/Default/Cookies');
+    if (fs.existsSync(chromeCookiesPath)) {
+        try {
+            const defaultSession = session.defaultSession;
+            const cookies = await defaultSession.cookies.get({});
+            for (const cookie of cookies) {
+                await persistentSession.cookies.set({
+                    url: cookie.url || `http${cookie.secure ? 's' : ''}://${cookie.domain}${cookie.path}`,
+                    name: cookie.name,
+                    value: cookie.value,
+                    domain: cookie.domain,
+                    path: cookie.path,
+                    secure: cookie.secure,
+                    httpOnly: cookie.httpOnly,
+                    expirationDate: cookie.expirationDate
+                });
+            }
+            console.log('Successfully copied cookies from Chrome');
+        } catch (error) {
+            console.error('Error copying cookies:', error);
+        }
+    }
+}
+
 function createWindow() {
     mainWindow = new BrowserWindow({
         width: 1200,
@@ -39,7 +73,10 @@ function createWindow() {
         webPreferences: {
             nodeIntegration: true,
             contextIsolation: false,
-            webviewTag: true
+            webviewTag: true,
+            webSecurity: true,
+            allowRunningInsecureContent: false,
+            devTools: true
         },
         titleBarStyle: 'hiddenInset', // macOS 风格的标题栏
         backgroundColor: '#1e1e1e',
@@ -47,6 +84,18 @@ function createWindow() {
     });
 
     mainWindow.loadFile('index.html');
+    
+    // 只有启用 debug 时才打开开发者工具
+    if (enableDebug) {
+        mainWindow.webContents.openDevTools();
+    }
+
+    // 向渲染进程发送 enable-debug 标志
+    mainWindow.webContents.on('did-finish-load', () => {
+        if (enableDebug) {
+            mainWindow.webContents.send('enable-debug');
+        }
+    });
     
     // 等待窗口加载完成后再显示，避免白屏
     mainWindow.once('ready-to-show', () => {
@@ -159,12 +208,55 @@ function createWindow() {
     Menu.setApplicationMenu(menu);
 }
 
-app.whenReady().then(() => {
-    // 创建持久化会话
-    persistentSession = session.fromPartition('persist:chatgpt', {
-        cache: true,
-        path: path.join(dataDir, 'session')
+app.whenReady().then(async () => {
+    // 创建 Chrome 数据目录
+    const chromeDataDir = path.join(dataDir, 'chrome-data');
+    console.log('Chrome data path:', chromeDataDir);
+    
+    // 确保 Chrome 数据目录存在
+    if (!fs.existsSync(chromeDataDir)) {
+        fs.mkdirSync(chromeDataDir, { recursive: true });
+    }
+
+    // 设置会话存储路径
+    const sessionStoragePath = path.join(chromeDataDir, 'Session Storage');
+    const localStoragePath = path.join(chromeDataDir, 'Local Storage');
+    const cachePath = path.join(chromeDataDir, 'Cache');
+    const cookiesPath = path.join(chromeDataDir, 'Cookies');
+    
+    // 确保所有子目录存在
+    [sessionStoragePath, localStoragePath, cachePath, cookiesPath].forEach(dir => {
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
     });
+    
+    // 创建共享的持久化会话
+    persistentSession = session.fromPartition('persist:shared', {
+        cache: true,
+        path: chromeDataDir
+    });
+
+    // 设置会话存储路径
+    await persistentSession.setStorageAccessSync({
+        sessionStorage: sessionStoragePath,
+        localStorage: localStoragePath,
+        cache: cachePath,
+        cookies: cookiesPath
+    });
+
+    // 设置会话持久化
+    await persistentSession.setPermissionRequestHandler((webContents, permission, callback) => {
+        const allowedPermissions = ['media', 'geolocation', 'notifications'];
+        if (allowedPermissions.includes(permission)) {
+            callback(true);
+        } else {
+            callback(false);
+        }
+    });
+
+    // 复制 Chrome cookies
+    await copyChromeCookies();
     
     createWindow();
 
