@@ -39,6 +39,12 @@
             text-align: center;
             padding: 0 16px;
             min-width: 0; /* 允许文本截断 */
+            /* 保持拖动功能，不设置 no-drag */
+        }
+
+        .titlebar-buttons {
+            display: flex;
+            align-items: center;
             -webkit-app-region: no-drag;
         }
 
@@ -307,28 +313,30 @@
 </head>
 <body>
     <div class="titlebar">
-        <button class="smart-button" id="smartButton">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-            </svg>
-        </button>
         <div class="book-info" id="bookInfo">
             <div class="book-title" id="bookTitleDisplay">AI Book Reader</div>
             <div class="book-author" id="bookAuthorDisplay"></div>
         </div>
-        <button class="smart-button" id="settingsButton">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="3"/>
-                <path d="M12 1v6"/>
-                <path d="M12 17v6"/>
-                <path d="M1 12h6"/>
-                <path d="M17 12h6"/>
-                <path d="M4.22 4.22l4.24 4.24"/>
-                <path d="M15.54 15.54l4.24 4.24"/>
-                <path d="M19.78 4.22l-4.24 4.24"/>
-                <path d="M8.46 15.54l-4.24 4.24"/>
-            </svg>
-        </button>
+        <div class="titlebar-buttons">
+            <button class="smart-button" id="smartButton">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                </svg>
+            </button>
+            <button class="smart-button" id="settingsButton">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="3"/>
+                    <path d="M12 1v6"/>
+                    <path d="M12 17v6"/>
+                    <path d="M1 12h6"/>
+                    <path d="M17 12h6"/>
+                    <path d="M4.22 4.22l4.24 4.24"/>
+                    <path d="M15.54 15.54l4.24 4.24"/>
+                    <path d="M19.78 4.22l-4.24 4.24"/>
+                    <path d="M8.46 15.54l-4.24 4.24"/>
+                </svg>
+            </button>
+        </div>
     </div>
     <div class="main-content">
         <div class="left-panel">
