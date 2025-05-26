@@ -23,11 +23,34 @@ const DEFAULT_CONFIG = {
     // UI 选择器
     selectors: {
         editor: '.ProseMirror[contenteditable="true"]',
-        sendButton: [
-            'button[data-testid="send-button"]',
-            'button[aria-label="Send message"]',
-            'button:has(svg)'
+        
+        // 停止按钮选择器（AI正在工作时）
+        stopButtons: [
+            'button[data-testid="stop-button"]',                    // 主要选择器
+            'button[aria-label*="停止"]',                           // 中文停止按钮
+            'button[aria-label*="Stop"]',                           // 英文停止按钮
+            'button:has(svg rect[width="10"][height="10"])',        // 通过SVG方形图标检测
+            'button#composer-submit-button[aria-label*="停止"]'     // 通过ID和label组合
         ],
+        
+        // 发送按钮选择器（可以发送时）
+        sendButtons: [
+            'button[data-testid="send-button"]',                    // 主要选择器
+            'button[aria-label*="发送"]',                           // 中文发送按钮
+            'button[aria-label*="Send"]',                           // 英文发送按钮
+            'button:has(svg path[d*="14.9993V5.41334"])',          // 通过SVG箭头图标检测
+            'button#composer-submit-button[aria-label*="发送"]',    // 通过ID和label组合
+            'button#composer-submit-button[aria-label*="Send"]'     // 英文版本
+        ],
+        
+        // 语音按钮选择器（语音模式时）
+        voiceButtons: [
+            'button[data-testid="composer-speech-button"]',         // 主要选择器
+            'button[aria-label*="语音"]',                           // 中文语音按钮
+            'button[aria-label*="Voice"]',                          // 英文语音按钮
+            'button[aria-label*="启动语音模式"]'                    // 具体的语音模式按钮
+        ],
+        
         uploadElements: [
             '[data-testid*="upload"]',
             '[class*="upload"]',

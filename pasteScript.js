@@ -5,17 +5,54 @@
     try {
         console.log('=== 开始智能解释流程 ===');
         
-        // 步骤1: 检查是否有正在进行的对话（通过检查停止按钮）
-        console.log('步骤1: 检查AI是否正在工作...');
+        // 按钮检测配置
+        const buttonSelectors = {
+            stopButtons: [
+                'button[data-testid="stop-button"]',
+                'button[aria-label*="停止"]',
+                'button[aria-label*="Stop"]',
+                'button:has(svg rect[width="10"][height="10"])',
+                'button#composer-submit-button[aria-label*="停止"]'
+            ],
+            sendButtons: [
+                'button[data-testid="send-button"]',
+                'button[aria-label*="发送"]',
+                'button[aria-label*="Send"]',
+                'button:has(svg path[d*="14.9993V5.41334"])',
+                'button#composer-submit-button[aria-label*="发送"]',
+                'button#composer-submit-button[aria-label*="Send"]'
+            ],
+            voiceButtons: [
+                'button[data-testid="composer-speech-button"]',
+                'button[aria-label*="语音"]',
+                'button[aria-label*="Voice"]',
+                'button[aria-label*="启动语音模式"]'
+            ]
+        };
         
-        // 检查是否有停止按钮（表示AI正在生成回复）
-        const stopButton = document.querySelector('button[aria-label*="停止"]') ||
-                         document.querySelector('button[aria-label*="Stop"]') ||
-                         document.querySelector('button[data-testid*="stop"]') ||
-                         document.querySelector('button:has(svg) [d*="M6 6h12v12H6z"]'); // 停止图标的路径
+        // 智能按钮检测函数
+        function findButton(selectors, buttonType) {
+            for (const selector of selectors) {
+                try {
+                    const button = document.querySelector(selector);
+                    if (button) {
+                        console.log(`找到${buttonType}按钮:`, selector, button.getAttribute('aria-label'));
+                        return button;
+                    }
+                } catch (error) {
+                    console.log(`选择器 "${selector}" 执行失败:`, error.message);
+                }
+            }
+            return null;
+        }
         
+        // 步骤1: 检查ChatGPT当前状态
+        console.log('步骤1: 检查ChatGPT当前状态...');
+        
+        // 检测停止按钮（AI正在工作）
+        const stopButton = findButton(buttonSelectors.stopButtons, '停止');
         if (stopButton) {
-            console.log('检测到停止按钮，AI正在工作');
+            console.log('AI正在工作，等待完成');
             return 'ai_working';
         }
         
@@ -92,8 +129,15 @@
         await new Promise(resolve => setTimeout(resolve, 1000));
 
         // 查找发送按钮
-        const sendButton = document.querySelector('button[data-testid="send-button"]');
+        console.log('查找发送按钮...');
+        const sendButton = findButton(buttonSelectors.sendButtons, '发送');
+        
         if (!sendButton) {
+            // 检查是否是语音模式
+            const voiceButton = findButton(buttonSelectors.voiceButtons, '语音');
+            if (voiceButton) {
+                throw new Error('当前处于语音模式，无法发送文本消息');
+            }
             throw new Error('找不到发送按钮');
         }
 
