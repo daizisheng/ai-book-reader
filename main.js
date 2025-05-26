@@ -105,7 +105,7 @@ function createWindow() {
         mainWindow = null;
     });
 
-    // 创建菜单
+    // 创建完整的应用菜单，包含快捷键支持
     const template = [
         {
             label: 'AI Book Reader',
@@ -145,6 +145,135 @@ function createWindow() {
                     click: () => {
                         app.quit();
                     }
+                }
+            ]
+        },
+        {
+            label: '编辑',
+            submenu: [
+                {
+                    label: '撤销',
+                    accelerator: 'CmdOrCtrl+Z',
+                    role: 'undo',
+                    click: () => {
+                        // 发送撤销命令到当前焦点的webview
+                        mainWindow.webContents.send('webview-command', 'undo');
+                    }
+                },
+                {
+                    label: '重做',
+                    accelerator: 'Shift+CmdOrCtrl+Z',
+                    role: 'redo',
+                    click: () => {
+                        // 发送重做命令到当前焦点的webview
+                        mainWindow.webContents.send('webview-command', 'redo');
+                    }
+                },
+                { type: 'separator' },
+                {
+                    label: '剪切',
+                    accelerator: 'CmdOrCtrl+X',
+                    role: 'cut',
+                    click: () => {
+                        // 发送剪切命令到当前焦点的webview
+                        mainWindow.webContents.send('webview-command', 'cut');
+                    }
+                },
+                {
+                    label: '复制',
+                    accelerator: 'CmdOrCtrl+C',
+                    role: 'copy',
+                    click: () => {
+                        // 发送复制命令到当前焦点的webview
+                        mainWindow.webContents.send('webview-command', 'copy');
+                    }
+                },
+                {
+                    label: '粘贴',
+                    accelerator: 'CmdOrCtrl+V',
+                    role: 'paste',
+                    click: () => {
+                        // 发送粘贴命令到当前焦点的webview
+                        mainWindow.webContents.send('webview-command', 'paste');
+                    }
+                },
+                {
+                    label: '全选',
+                    accelerator: 'CmdOrCtrl+A',
+                    role: 'selectall',
+                    click: () => {
+                        // 发送全选命令到当前焦点的webview
+                        mainWindow.webContents.send('webview-command', 'selectAll');
+                    }
+                }
+            ]
+        },
+        {
+            label: '查看',
+            submenu: [
+                {
+                    label: '重新加载',
+                    accelerator: 'CmdOrCtrl+R',
+                    click: () => {
+                        // 重新加载当前焦点的webview
+                        mainWindow.webContents.send('webview-command', 'reload');
+                    }
+                },
+                {
+                    label: '强制重新加载',
+                    accelerator: 'CmdOrCtrl+Shift+R',
+                    click: () => {
+                        // 强制重新加载当前焦点的webview
+                        mainWindow.webContents.send('webview-command', 'reloadIgnoringCache');
+                    }
+                },
+                { type: 'separator' },
+                {
+                    label: '实际大小',
+                    accelerator: 'CmdOrCtrl+0',
+                    click: () => {
+                        // 重置缩放
+                        mainWindow.webContents.send('webview-command', 'zoomReset');
+                    }
+                },
+                {
+                    label: '放大',
+                    accelerator: 'CmdOrCtrl+Plus',
+                    click: () => {
+                        // 放大
+                        mainWindow.webContents.send('webview-command', 'zoomIn');
+                    }
+                },
+                {
+                    label: '缩小',
+                    accelerator: 'CmdOrCtrl+-',
+                    click: () => {
+                        // 缩小
+                        mainWindow.webContents.send('webview-command', 'zoomOut');
+                    }
+                },
+                { type: 'separator' },
+                {
+                    label: '切换开发者工具',
+                    accelerator: process.platform === 'darwin' ? 'Alt+Cmd+I' : 'Ctrl+Shift+I',
+                    click: () => {
+                        mainWindow.webContents.toggleDevTools();
+                    }
+                }
+            ]
+        },
+        {
+            label: '窗口',
+            submenu: [
+                {
+                    label: '最小化',
+                    accelerator: 'CmdOrCtrl+M',
+                    role: 'minimize'
+                },
+                {
+                    label: '关闭',
+                    accelerator: 'CmdOrCtrl+W',
+                    role: 'close'
                 }
             ]
         }

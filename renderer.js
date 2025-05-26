@@ -42,6 +42,22 @@ const bookAuthorDisplay = document.getElementById('bookAuthorDisplay');
     webview.setAttribute('partition', 'persist:shared');
     webview.setAttribute('useragent', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
     
+    // 添加交互事件监听器
+    webview.addEventListener('focus', () => {
+        logger.log('Webview Focus', `${webview.id} 获得焦点`);
+        lastWebviewInteraction = webview;
+    });
+    
+    webview.addEventListener('click', () => {
+        logger.log('Webview Interaction', `${webview.id} 被点击`);
+        lastWebviewInteraction = webview;
+    });
+    
+    webview.addEventListener('mousedown', () => {
+        logger.log('Webview Interaction', `${webview.id} 鼠标按下`);
+        lastWebviewInteraction = webview;
+    });
+    
     // 为右侧 webview 启用上下文菜单
     if (webview.id === 'rightWebview') {
         // 监听上下文菜单事件并创建自定义菜单
@@ -168,6 +184,91 @@ document.addEventListener('DOMContentLoaded', () => {
     // 初始化按钮状态
     updateButtonStates();
     
+    // 添加全局键盘事件监听器作为备用
+    document.addEventListener('keydown', (event) => {
+        // 检查是否是快捷键组合
+        const isCtrlOrCmd = event.ctrlKey || event.metaKey;
+        
+        if (!isCtrlOrCmd) return;
+        
+        // 防止默认行为，让我们的处理器接管
+        let handled = false;
+        
+        switch (event.key.toLowerCase()) {
+            case 'c':
+                if (!event.shiftKey) {
+                    logger.log('Keyboard Shortcut', 'Ctrl+C 复制');
+                    executeWebviewCommand(getFocusedWebview(), 'copy');
+                    handled = true;
+                }
+                break;
+            case 'v':
+                if (!event.shiftKey) {
+                    logger.log('Keyboard Shortcut', 'Ctrl+V 粘贴');
+                    executeWebviewCommand(getFocusedWebview(), 'paste');
+                    handled = true;
+                }
+                break;
+            case 'x':
+                if (!event.shiftKey) {
+                    logger.log('Keyboard Shortcut', 'Ctrl+X 剪切');
+                    executeWebviewCommand(getFocusedWebview(), 'cut');
+                    handled = true;
+                }
+                break;
+            case 'a':
+                if (!event.shiftKey) {
+                    logger.log('Keyboard Shortcut', 'Ctrl+A 全选');
+                    executeWebviewCommand(getFocusedWebview(), 'selectAll');
+                    handled = true;
+                }
+                break;
+            case 'z':
+                if (event.shiftKey) {
+                    logger.log('Keyboard Shortcut', 'Ctrl+Shift+Z 重做');
+                    executeWebviewCommand(getFocusedWebview(), 'redo');
+                    handled = true;
+                } else {
+                    logger.log('Keyboard Shortcut', 'Ctrl+Z 撤销');
+                    executeWebviewCommand(getFocusedWebview(), 'undo');
+                    handled = true;
+                }
+                break;
+            case 'r':
+                if (event.shiftKey) {
+                    logger.log('Keyboard Shortcut', 'Ctrl+Shift+R 强制刷新');
+                    executeWebviewCommand(getFocusedWebview(), 'reloadIgnoringCache');
+                    handled = true;
+                } else {
+                    logger.log('Keyboard Shortcut', 'Ctrl+R 刷新');
+                    executeWebviewCommand(getFocusedWebview(), 'reload');
+                    handled = true;
+                }
+                break;
+            case '0':
+                logger.log('Keyboard Shortcut', 'Ctrl+0 重置缩放');
+                executeWebviewCommand(getFocusedWebview(), 'zoomReset');
+                handled = true;
+                break;
+            case '=':
+            case '+':
+                logger.log('Keyboard Shortcut', 'Ctrl++ 放大');
+                executeWebviewCommand(getFocusedWebview(), 'zoomIn');
+                handled = true;
+                break;
+            case '-':
+                logger.log('Keyboard Shortcut', 'Ctrl+- 缩小');
+                executeWebviewCommand(getFocusedWebview(), 'zoomOut');
+                handled = true;
+                break;
+        }
+        
+        if (handled) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+    });
+    
     rightWebview.addEventListener('did-fail-load', (event) => {
         logger.error('Right Webview', '加载失败:', {
             errorCode: event.errorCode,
@@ -265,6 +366,112 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 });
+
+// 监听来自主进程的webview命令
+ipcRenderer.on('webview-command', (event, command) => {
+    logger.log('Webview Command', '收到webview命令:', command);
+    
+    // 获取当前焦点的webview
+    const focusedWebview = getFocusedWebview();
+    
+    if (!focusedWebview) {
+        logger.warn('Webview Command', '没有找到焦点webview，尝试右侧webview');
+        // 如果没有焦点webview，默认使用右侧webview（ChatGPT）
+        executeWebviewCommand(rightWebview, command);
+        return;
+    }
+    
+    executeWebviewCommand(focusedWebview, command);
+});
+
+// 获取当前焦点的webview
+function getFocusedWebview() {
+    // 检查哪个webview当前有焦点
+    if (document.activeElement === leftWebview) {
+        logger.log('Webview Focus', '左侧webview有焦点');
+        return leftWebview;
+    } else if (document.activeElement === rightWebview) {
+        logger.log('Webview Focus', '右侧webview有焦点');
+        return rightWebview;
+    }
+    
+    // 如果没有明确的焦点，检查最近的用户交互
+    const lastInteraction = getLastWebviewInteraction();
+    if (lastInteraction) {
+        logger.log('Webview Focus', '使用最近交互的webview:', lastInteraction.id);
+        return lastInteraction;
+    }
+    
+    // 默认返回右侧webview
+    logger.log('Webview Focus', '默认使用右侧webview');
+    return rightWebview;
+}
+
+// 记录webview交互
+let lastWebviewInteraction = null;
+
+// 执行webview命令
+function executeWebviewCommand(webview, command) {
+    if (!webview) {
+        logger.warn('Webview Command', 'webview不存在');
+        return;
+    }
+    
+    logger.log('Webview Command', `在${webview.id}上执行命令:`, command);
+    
+    try {
+        switch (command) {
+            case 'cut':
+                webview.executeJavaScript('document.execCommand("cut")');
+                break;
+            case 'copy':
+                webview.executeJavaScript('document.execCommand("copy")');
+                break;
+            case 'paste':
+                webview.executeJavaScript('document.execCommand("paste")');
+                break;
+            case 'selectAll':
+                webview.executeJavaScript('document.execCommand("selectAll")');
+                break;
+            case 'undo':
+                webview.executeJavaScript('document.execCommand("undo")');
+                break;
+            case 'redo':
+                webview.executeJavaScript('document.execCommand("redo")');
+                break;
+            case 'reload':
+                webview.reload();
+                break;
+            case 'reloadIgnoringCache':
+                webview.reloadIgnoringCache();
+                break;
+            case 'zoomIn':
+                webview.executeJavaScript(`
+                    document.body.style.zoom = (parseFloat(document.body.style.zoom || 1) + 0.1).toString();
+                `);
+                break;
+            case 'zoomOut':
+                webview.executeJavaScript(`
+                    document.body.style.zoom = Math.max(0.1, parseFloat(document.body.style.zoom || 1) - 0.1).toString();
+                `);
+                break;
+            case 'zoomReset':
+                webview.executeJavaScript(`
+                    document.body.style.zoom = '1';
+                `);
+                break;
+            default:
+                logger.warn('Webview Command', '未知命令:', command);
+        }
+    } catch (error) {
+        logger.error('Webview Command', '执行命令失败:', error);
+    }
+}
+
+// 获取最近交互的webview
+function getLastWebviewInteraction() {
+    return lastWebviewInteraction;
+}
 
 // 监听来自主进程的消息
 ipcRenderer.on('file-opened', async (event, filePath) => {
