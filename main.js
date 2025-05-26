@@ -116,68 +116,13 @@ function createWindow() {
                         }
                     }
                 },
-                { type: 'separator' },
                 {
-                    label: '退出',
-                    accelerator: 'CmdOrCtrl+Q',
+                    label: '关闭文件',
+                    accelerator: 'CmdOrCtrl+W',
                     click: () => {
-                        app.quit();
-                    }
-                }
-            ]
-        },
-        {
-            label: '编辑',
-            submenu: [
-                {
-                    label: '撤销',
-                    accelerator: 'CmdOrCtrl+Z',
-                    role: 'undo'
-                },
-                {
-                    label: '重做',
-                    accelerator: 'CmdOrCtrl+Y',
-                    role: 'redo'
-                },
-                { type: 'separator' },
-                {
-                    label: '剪切',
-                    accelerator: 'CmdOrCtrl+X',
-                    role: 'cut'
-                },
-                {
-                    label: '复制',
-                    accelerator: 'CmdOrCtrl+C',
-                    role: 'copy'
-                },
-                {
-                    label: '粘贴',
-                    accelerator: 'CmdOrCtrl+V',
-                    role: 'paste'
-                }
-            ]
-        },
-        {
-            label: '视图',
-            submenu: [
-                {
-                    label: '设置',
-                    accelerator: 'CmdOrCtrl+,',
-                    click: () => {
-                        // TODO: 实现设置功能
-                        console.log('Settings');
-                    }
-                }
-            ]
-        },
-        {
-            label: '帮助',
-            submenu: [
-                {
-                    label: '关于',
-                    click: () => {
-                        // TODO: 实现关于功能
-                        console.log('About');
+                        // 清除保存的文件路径
+                        store.delete('lastFile');
+                        mainWindow.webContents.send('file-closed');
                     }
                 }
             ]

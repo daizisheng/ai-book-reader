@@ -150,6 +150,26 @@ ipcRenderer.on('file-opened', async (event, filePath) => {
     }
 });
 
+// 监听关闭文件事件
+ipcRenderer.on('file-closed', () => {
+    logger.log('File Closed', '收到文件关闭请求');
+    
+    // 清空左侧 webview
+    leftWebview.loadURL('about:blank');
+    logger.log('File Closed', '已清空左侧面板');
+    
+    // 清除当前文件信息
+    currentFilePath = null;
+    currentFileMD5 = null;
+    logger.log('File Closed', '已清除当前文件信息');
+    
+    // 显示关闭通知
+    const notification = new Notification('文件已关闭', {
+        body: '当前PDF文件已关闭',
+        silent: true
+    });
+});
+
 // 添加截图功能
 smartButton.addEventListener('click', async () => {
     logger.log('Smart Button', '用户点击了 Smart 按钮');
