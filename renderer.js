@@ -173,6 +173,17 @@ ipcRenderer.on('file-closed', () => {
 // 添加截图功能
 smartButton.addEventListener('click', async () => {
     logger.log('Smart Button', '用户点击了 Smart 按钮');
+    
+    // 检查是否有打开的文件
+    if (!currentFilePath) {
+        logger.warn('Smart Button', '没有打开的文件');
+        const notification = new Notification('请先打开书籍', {
+            body: '请先通过菜单打开一本书籍，然后再使用解释功能',
+            silent: true
+        });
+        return;
+    }
+    
     try {
         logger.log('Smart Button', '开始截取左侧面板...');
         // 获取左侧面板的截图
