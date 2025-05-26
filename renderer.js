@@ -100,6 +100,9 @@ rightWebview.addEventListener('dom-ready', () => {
 document.addEventListener('DOMContentLoaded', () => {
     logger.log('App', 'DOM 完全加载完成');
     
+    // 初始化按钮状态
+    updateButtonStates();
+    
     rightWebview.addEventListener('did-fail-load', (event) => {
         logger.error('Right Webview', '加载失败:', {
             errorCode: event.errorCode,
@@ -359,7 +362,41 @@ function updateButtonStates() {
         settingsButton.style.cursor = 'not-allowed';
     }
     
+    // 更新设置界面中的文件相关字段状态
+    updateBookSettingsState(hasFile);
+    
     logger.log('Button States', '按钮状态已更新:', { hasFile, smartDisabled: !hasFile, settingsDisabled: !hasFile });
+}
+
+// Update book settings section state
+function updateBookSettingsState(hasFile) {
+    const bookSettingsSection = document.getElementById('bookSettingsSection');
+    const bookTitle = document.getElementById('bookTitle');
+    const bookAuthor = document.getElementById('bookAuthor');
+    const explainPrompt = document.getElementById('explainPrompt');
+    
+    if (!bookSettingsSection) return;
+    
+    if (hasFile) {
+        // 启用状态
+        bookSettingsSection.classList.remove('disabled');
+        bookTitle.disabled = false;
+        bookAuthor.disabled = false;
+        explainPrompt.disabled = false;
+    } else {
+        // 禁用状态
+        bookSettingsSection.classList.add('disabled');
+        bookTitle.disabled = true;
+        bookAuthor.disabled = true;
+        explainPrompt.disabled = true;
+        
+        // 清空字段内容
+        bookTitle.value = '';
+        bookAuthor.value = '';
+        explainPrompt.value = '';
+    }
+    
+    logger.log('Book Settings', '本书设置状态已更新:', { hasFile, disabled: !hasFile });
 }
 
 // Update book info display in titlebar
@@ -459,6 +496,9 @@ async function loadSettings() {
             bookAuthor.value = '';
             explainPrompt.value = '';
         }
+        
+        // 确保设置界面的状态与当前文件状态一致
+        updateBookSettingsState(!!currentFilePath);
     } catch (error) {
         logger.error('Settings', '加载设置失败:', error);
     }
