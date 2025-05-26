@@ -5,242 +5,239 @@
     try {
         console.log('=== 开始智能解释流程 ===');
         
-        // 按钮检测配置
-        const buttonSelectors = {
-            stopButtons: [
-                'button[data-testid="stop-button"]',
-                'button[aria-label*="停止"]',
-                'button[aria-label*="Stop"]',
-                'button:has(svg rect[width="10"][height="10"])',
-                'button#composer-submit-button[aria-label*="停止"]'
-            ],
-            sendButtons: [
-                'button[data-testid="send-button"]',
-                'button[aria-label*="发送"]',
-                'button[aria-label*="Send"]',
-                'button:has(svg path[d*="14.9993V5.41334"])',
-                'button#composer-submit-button[aria-label*="发送"]',
-                'button#composer-submit-button[aria-label*="Send"]'
-            ],
-            voiceButtons: [
-                'button[data-testid="composer-speech-button"]',
-                'button[aria-label*="语音"]',
-                'button[aria-label*="Voice"]',
-                'button[aria-label*="启动语音模式"]'
-            ]
+        // 按钮检测器
+        const ButtonDetector = {
+            SEND_BUTTON: () => document.querySelector('button[data-testid="send-button"]'),
+            STOP_BUTTON: () => document.querySelector('button[data-testid="stop-button"]'),
+            VOICE_BUTTON: () => document.querySelector('button[data-testid="composer-speech-button"]'),
+            
+            // 检测当前状态
+            getCurrentState() {
+                const sendBtn = this.SEND_BUTTON();
+                const stopBtn = this.STOP_BUTTON();
+                const voiceBtn = this.VOICE_BUTTON();
+                
+                if (stopBtn) return 'AI_WORKING';
+                if (sendBtn) return 'READY_TO_SEND';
+                if (voiceBtn) return 'VOICE_MODE';
+                return 'UNKNOWN';
+            },
+            
+            // 打印当前状态
+            logCurrentState() {
+                const state = this.getCurrentState();
+                const sendBtn = this.SEND_BUTTON();
+                const stopBtn = this.STOP_BUTTON();
+                const voiceBtn = this.VOICE_BUTTON();
+                
+                console.log(`当前状态: ${state}`);
+                console.log(`SEND_BUTTON存在: ${!!sendBtn}, 启用: ${sendBtn ? !sendBtn.disabled : 'N/A'}`);
+                console.log(`STOP_BUTTON存在: ${!!stopBtn}, 启用: ${stopBtn ? !stopBtn.disabled : 'N/A'}`);
+                console.log(`VOICE_BUTTON存在: ${!!voiceBtn}, 启用: ${voiceBtn ? !voiceBtn.disabled : 'N/A'}`);
+                
+                return state;
+            }
         };
         
-        // 智能按钮检测函数
-        function findButton(selectors, buttonType) {
-            for (const selector of selectors) {
-                try {
-                    const button = document.querySelector(selector);
-                    if (button) {
-                        console.log(`找到${buttonType}按钮:`, selector, button.getAttribute('aria-label'));
-                        return button;
-                    }
-                } catch (error) {
-                    console.log(`选择器 "${selector}" 执行失败:`, error.message);
-                }
-            }
-            return null;
-        }
+        // 步骤1: 检查初始状态
+        console.log('步骤1: 检查ChatGPT初始状态');
+        const initialState = ButtonDetector.logCurrentState();
         
-        // 监控AI完成状态的函数
-        async function waitForAICompletion(bookName) {
-            console.log('开始监控AI完成状态...');
-            const maxWaitTime = 300000; // 5分钟最大等待时间
-            const checkInterval = 2000; // 每2秒检查一次
-            const startTime = Date.now();
-            
-            return new Promise((resolve) => {
-                const checkCompletion = () => {
-                    const currentTime = Date.now();
-                    
-                    // 检查是否超时
-                    if (currentTime - startTime > maxWaitTime) {
-                        console.log('监控超时，停止等待');
-                        resolve(false);
-                        return;
-                    }
-                    
-                    // 检查停止按钮是否还存在
-                    const stopButton = findButton(buttonSelectors.stopButtons, '停止');
-                    
-                    if (!stopButton) {
-                        // 停止按钮消失，说明AI完成了
-                        console.log('AI解读完成，发送通知');
-                        
-                                                 // 通过IPC发送完成通知给主进程
-                         try {
-                             // Electron webview环境 - 使用ipcRenderer
-                             if (window.require) {
-                                 const { ipcRenderer } = window.require('electron');
-                                 ipcRenderer.sendToHost('ai-explanation-complete', bookName);
-                                 console.log('通过ipcRenderer发送完成通知');
-                             } else {
-                                 console.log('ipcRenderer不可用，尝试其他方法');
-                             }
-                         } catch (error) {
-                             console.log('IPC消息发送失败:', error);
-                         }
-                         
-                         // 备用方法：使用自定义事件
-                         try {
-                             const event = new CustomEvent('ai-explanation-complete', {
-                                 detail: { bookName: bookName }
-                             });
-                             window.dispatchEvent(event);
-                             console.log('发送自定义事件完成');
-                         } catch (error) {
-                             console.log('自定义事件发送失败:', error);
-                         }
-                        
-                        resolve(true);
-                        return;
-                    }
-                    
-                    // 继续监控
-                    console.log('AI仍在工作，继续监控...');
-                    setTimeout(checkCompletion, checkInterval);
-                };
-                
-                // 开始第一次检查
-                setTimeout(checkCompletion, checkInterval);
-            });
-        }
-        
-        // 步骤1: 检查ChatGPT当前状态
-        console.log('步骤1: 检查ChatGPT当前状态...');
-        
-        // 检测停止按钮（AI正在工作）
-        const stopButton = findButton(buttonSelectors.stopButtons, '停止');
-        if (stopButton) {
-            console.log('AI正在工作，等待完成');
+        if (initialState === 'AI_WORKING') {
+            console.log('AI正在工作中，退出流程');
             return 'ai_working';
         }
         
-        console.log('AI未在工作，继续执行...');
-        
-        // 等待页面完全加载
-        if (document.readyState !== 'complete') {
-            await new Promise(resolve => window.addEventListener('load', resolve));
+        if (initialState === 'UNKNOWN') {
+            console.log('无法识别当前状态，退出流程');
+            return 'unknown_state';
         }
         
-        // 查找 ProseMirror 编辑器
+        // 步骤2: 查找编辑器并粘贴图片
+        console.log('步骤2: 查找编辑器并粘贴图片');
         const editor = document.querySelector('.ProseMirror[contenteditable="true"]');
         if (!editor) {
-            throw new Error('找不到 ChatGPT 输入框');
+            console.log('找不到ChatGPT输入框，退出流程');
+            return 'no_editor';
         }
         
         // 聚焦编辑器
         editor.focus();
+        console.log('已聚焦编辑器');
         
-        // 方法1: 使用 execCommand
+        // 粘贴图片 - 使用多种方法确保成功
+        console.log('开始粘贴图片...');
+        
+        // 方法1: execCommand
         document.execCommand('paste');
         
-        // 方法2: 使用 Clipboard API
-        try {
-            const clipboardItems = await navigator.clipboard.read();
-            for (const item of clipboardItems) {
-                if (item.types.includes('image/png')) {
-                    const blob = await item.getType('image/png');
-                    const img = document.createElement('img');
-                    img.src = URL.createObjectURL(blob);
-                    editor.appendChild(img);
-                }
-            }
-        } catch (clipboardError) {
-            console.log('Clipboard API 失败，尝试其他方法');
-        }
-        
-        // 方法3: 模拟键盘事件
+        // 方法2: 键盘事件
         const pasteEvent = new KeyboardEvent('keydown', {
             key: 'v',
             code: 'KeyV',
             ctrlKey: true,
+            metaKey: navigator.platform.includes('Mac'),
             bubbles: true,
             cancelable: true
         });
         editor.dispatchEvent(pasteEvent);
         
-        // 方法4: 模拟粘贴事件
-        const pasteEvent2 = new ClipboardEvent('paste', {
-            clipboardData: new DataTransfer(),
+        // 方法3: 剪贴板事件
+        const clipboardEvent = new ClipboardEvent('paste', {
             bubbles: true,
             cancelable: true
         });
-        editor.dispatchEvent(pasteEvent2);
-
-        // 等待图片上传完成
+        editor.dispatchEvent(clipboardEvent);
+        
+        console.log('图片粘贴操作已执行');
+        
+        // 等待图片上传
         console.log('等待图片上传...');
-        await new Promise(resolve => setTimeout(resolve, 5000));
-        console.log('图片上传等待完成');
-
-        // 添加提示文本 - 这里会被动态替换
+        //await new Promise(resolve => setTimeout(resolve, 3000));
+        
+        // 添加提示文本
+        console.log('添加提示文本...');
         const promptText = 'PROMPT_PLACEHOLDER';
-        const textNode = document.createTextNode(promptText);
-        editor.appendChild(textNode);
-
-        // 触发输入事件以确保 ChatGPT 识别到文本变化
+        
+        // 创建新的段落元素
+        const p = document.createElement('p');
+        p.textContent = promptText;
+        
+        // 清空编辑器内容
+        editor.innerHTML = '';
+        
+        // 添加段落到编辑器
+        editor.appendChild(p);
+        
+        // 触发输入事件
         const inputEvent = new Event('input', {
             bubbles: true,
-            cancelable: true
+            cancelable: true,
+            composed: true
         });
         editor.dispatchEvent(inputEvent);
-
-        // 等待一小段时间让 ChatGPT 处理输入
-        await new Promise(resolve => setTimeout(resolve, 1000));
-
-        // 查找发送按钮
-        console.log('查找发送按钮...');
-        const sendButton = findButton(buttonSelectors.sendButtons, '发送');
+        
+        console.log('提示文本已添加');
+        
+        // 步骤3: 等待SEND_BUTTON出现且启用（最多30秒，每1秒检查一次）
+        console.log('步骤3: 等待SEND_BUTTON出现且启用');
+        let waitCount = 0;
+        const maxWaitForSend = 30; // 30秒
+        
+        while (waitCount < maxWaitForSend) {
+            const currentState = ButtonDetector.logCurrentState();
+            
+            if (currentState === 'READY_TO_SEND') {
+                // 检查SEND_BUTTON是否启用
+                const sendButton = ButtonDetector.SEND_BUTTON();
+                if (sendButton && !sendButton.disabled) {
+                    console.log(`SEND_BUTTON已出现且启用 (等待了${waitCount}秒)`);
+                    break;
+                } else {
+                    console.log(`SEND_BUTTON存在但被禁用 (等待了${waitCount}秒)`);
+                }
+            }
+            
+            if (currentState === 'AI_WORKING') {
+                console.log('检测到AI正在工作，退出流程');
+                return 'ai_working';
+            }
+            
+            waitCount++;
+            if (waitCount >= maxWaitForSend) {
+                console.log('等待SEND_BUTTON启用超时，退出流程');
+                return 'wait_send_timeout';
+            }
+            
+            console.log(`等待SEND_BUTTON启用... (${waitCount}/${maxWaitForSend})`);
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+        
+        // 步骤4: 点击SEND_BUTTON
+        console.log('步骤4: 点击SEND_BUTTON');
+        const sendButton = ButtonDetector.SEND_BUTTON();
         
         if (!sendButton) {
-            // 检查是否是语音模式
-            const voiceButton = findButton(buttonSelectors.voiceButtons, '语音');
-            if (voiceButton) {
-                throw new Error('当前处于语音模式，无法发送文本消息');
-            }
-            throw new Error('找不到发送按钮');
+            console.log('SEND_BUTTON不存在，退出流程');
+            return 'no_send_button';
         }
-
-        // 检查按钮是否可用
-        if (sendButton.disabled) {
-            console.log('发送按钮当前不可用，等待按钮可用...');
-            // 等待按钮可用
-            let attempts = 0;
-            while (sendButton.disabled && attempts < 10) {
-                await new Promise(resolve => setTimeout(resolve, 1000));
-                attempts++;
-                console.log('等待按钮可用，尝试次数: ' + attempts);
-            }
-            if (sendButton.disabled) {
-                throw new Error('发送按钮在等待后仍然不可用');
-            }
-        }
-
-        // 点击发送按钮
-        sendButton.click();
-        console.log('已点击发送按钮');
         
-        // 获取书名用于通知
+        if (sendButton.disabled) {
+            console.log('SEND_BUTTON被禁用，退出流程');
+            return 'send_button_disabled';
+        }
+        
+        sendButton.click();
+        console.log('已点击SEND_BUTTON');
+        
+        // 步骤5: 等待1秒，然后检查STOP_BUTTON是否出现
+        console.log('步骤5: 等待STOP_BUTTON出现');
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        const stateAfterSend = ButtonDetector.logCurrentState();
+        if (stateAfterSend !== 'AI_WORKING') {
+            console.log('发送后未检测到STOP_BUTTON，可能发送失败，退出流程');
+            return 'send_failed';
+        }
+        
+        console.log('STOP_BUTTON已出现，AI开始工作');
+        
+        // 步骤6: 等待STOP_BUTTON消失（最多5分钟，每5秒检查一次）
+        console.log('步骤6: 等待STOP_BUTTON消失');
+        let monitorCount = 0;
+        const maxMonitorTime = 60; // 5分钟 = 60 * 5秒
+        
+        while (monitorCount < maxMonitorTime) {
+            const currentState = ButtonDetector.logCurrentState();
+            
+            if (currentState !== 'AI_WORKING') {
+                console.log(`STOP_BUTTON已消失，AI完成工作 (监控了${monitorCount * 5}秒)`);
+                break;
+            }
+            
+            monitorCount++;
+            if (monitorCount >= maxMonitorTime) {
+                console.log('等待STOP_BUTTON消失超时，退出流程');
+                return 'monitor_timeout';
+            }
+            
+            console.log(`等待STOP_BUTTON消失... (${monitorCount * 5}/${maxMonitorTime * 5}秒)`);
+            await new Promise(resolve => setTimeout(resolve, 5000));
+        }
+        
+        // 步骤7: 发送系统通知
+        console.log('步骤7: 发送系统通知');
         const bookName = 'BOOK_NAME_PLACEHOLDER';
         
-        // 开始监控AI完成状态
-        console.log('开始监控AI解读完成状态...');
-        const completed = await waitForAICompletion(bookName);
-        
-        if (completed) {
-            console.log('AI解读完成监控成功');
-            return 'explanation_complete';
-        } else {
-            console.log('AI解读完成监控超时');
-            return 'monitoring_timeout';
+        // 发送IPC消息通知主进程
+        try {
+            if (window.require) {
+                const { ipcRenderer } = window.require('electron');
+                ipcRenderer.sendToHost('ai-explanation-complete', bookName);
+                console.log('已通过ipcRenderer发送完成通知');
+            } else {
+                console.log('ipcRenderer不可用');
+            }
+        } catch (error) {
+            console.log('IPC消息发送失败:', error);
         }
         
+        // 备用方法：自定义事件
+        try {
+            const event = new CustomEvent('ai-explanation-complete', {
+                detail: { bookName: bookName }
+            });
+            window.dispatchEvent(event);
+            console.log('已发送自定义事件');
+        } catch (error) {
+            console.log('自定义事件发送失败:', error);
+        }
+        
+        console.log('=== 智能解释流程完成 ===');
+        return 'success';
+        
     } catch (error) {
-        console.error('操作错误:', error);
-        return error.message;
+        console.error('流程执行出错:', error);
+        return `error: ${error.message}`;
     }
 })(); 

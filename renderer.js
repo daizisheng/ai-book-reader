@@ -400,33 +400,98 @@ smartButton.addEventListener('click', async () => {
             
             // 执行脚本
             const result = await rightWebview.executeJavaScript(pasteScript);
-            if (result === true) {
-                logger.log('Smart Button', '截图和提示文本已成功添加到 ChatGPT 并发送');
-            } else if (result === 'ai_working') {
-                logger.log('Smart Button', 'AI正在工作，等待完成');
-                // 显示等待通知
-                const waitNotification = new Notification('请稍等', {
-                    body: 'AI正在工作，请稍等...',
-                    silent: true
-                });
-                return; // 提前返回，不显示成功通知
-            } else if (result === 'explanation_complete') {
-                logger.log('Smart Button', '截图和提示文本已成功添加到 ChatGPT 并发送，正在监控完成状态');
-                // 显示开始解读通知
-                const startNotification = new Notification('开始解读', {
-                    body: '正在解读页面内容，完成后会通知您',
-                    silent: true
-                });
-                return; // 提前返回，等待解读完成通知
-            } else if (result === 'monitoring_timeout') {
-                logger.warn('Smart Button', 'AI解读完成监控超时');
-                const timeoutNotification = new Notification('监控超时', {
-                    body: 'AI解读监控超时，请手动检查ChatGPT页面',
-                    silent: true
-                });
-                return;
-            } else {
-                logger.warn('Smart Button', '操作过程中出现问题:', result);
+            logger.log('Smart Button', '脚本执行结果:', result);
+            
+            // 根据不同的结果显示相应的通知
+            switch (result) {
+                case 'success':
+                    logger.log('Smart Button', '智能解释流程成功完成');
+                    // 成功完成，等待解读完成通知
+                    const successNotification = new Notification('开始解读', {
+                        body: '正在解读页面内容，完成后会通知您',
+                        silent: true
+                    });
+                    return;
+                    
+                case 'ai_working':
+                    logger.log('Smart Button', 'AI正在工作中');
+                    const workingNotification = new Notification('AI正在工作', {
+                        body: 'AI正在处理中，请稍等...',
+                        silent: true
+                    });
+                    return;
+                    
+                case 'unknown_state':
+                    logger.warn('Smart Button', '无法识别ChatGPT状态');
+                    const unknownNotification = new Notification('状态未知', {
+                        body: '无法识别ChatGPT当前状态，请刷新页面',
+                        silent: true
+                    });
+                    return;
+                    
+                case 'no_editor':
+                    logger.warn('Smart Button', '找不到ChatGPT输入框');
+                    const noEditorNotification = new Notification('输入框未找到', {
+                        body: '找不到ChatGPT输入框，请确保页面已加载',
+                        silent: true
+                    });
+                    return;
+                    
+                case 'wait_send_timeout':
+                    logger.warn('Smart Button', '等待发送按钮启用超时');
+                    const waitTimeoutNotification = new Notification('等待超时', {
+                        body: '等待发送按钮启用超时，请检查输入内容',
+                        silent: true
+                    });
+                    return;
+                    
+                case 'no_send_button':
+                    logger.warn('Smart Button', '发送按钮不存在');
+                    const noSendNotification = new Notification('发送按钮未找到', {
+                        body: '找不到发送按钮，请检查页面状态',
+                        silent: true
+                    });
+                    return;
+                    
+                case 'send_button_disabled':
+                    logger.warn('Smart Button', '发送按钮被禁用');
+                    const disabledNotification = new Notification('发送按钮被禁用', {
+                        body: '发送按钮不可用，请检查输入内容',
+                        silent: true
+                    });
+                    return;
+                    
+                case 'send_failed':
+                    logger.warn('Smart Button', '发送可能失败');
+                    const failedNotification = new Notification('发送失败', {
+                        body: '发送后未检测到AI工作状态，请手动检查',
+                        silent: true
+                    });
+                    return;
+                    
+                case 'monitor_timeout':
+                    logger.warn('Smart Button', 'AI工作监控超时');
+                    const monitorTimeoutNotification = new Notification('监控超时', {
+                        body: 'AI工作监控超时，请手动检查ChatGPT页面',
+                        silent: true
+                    });
+                    return;
+                    
+                default:
+                    if (result && result.startsWith('error:')) {
+                        logger.error('Smart Button', '脚本执行出错:', result);
+                        const errorNotification = new Notification('执行出错', {
+                            body: result.replace('error: ', ''),
+                            silent: true
+                        });
+                    } else {
+                        logger.warn('Smart Button', '未知的执行结果:', result);
+                        const unknownResultNotification = new Notification('未知结果', {
+                            body: '操作完成，但结果未知',
+                            silent: true
+                        });
+                    }
+                    return;
             }
         } else {
             logger.warn('Smart Button', 'ChatGPT 页面未加载，当前页面:', currentUrl);
