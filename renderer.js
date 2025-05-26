@@ -182,6 +182,12 @@ ipcRenderer.on('file-closed', async () => {
 smartButton.addEventListener('click', async () => {
     logger.log('Smart Button', '用户点击了 Smart 按钮');
     
+    // 检查按钮是否被禁用
+    if (smartButton.disabled) {
+        logger.log('Smart Button', 'Smart按钮被禁用，忽略点击');
+        return;
+    }
+    
     // 检查是否有打开的文件
     if (!currentFilePath) {
         logger.warn('Smart Button', '没有打开的文件');
@@ -332,6 +338,30 @@ async function generateFileMD5(filePath) {
 let currentFilePath = null;
 let currentFileMD5 = null;
 
+// Update button states based on file status
+function updateButtonStates() {
+    const hasFile = !!currentFilePath;
+    
+    // 更新按钮状态
+    smartButton.disabled = !hasFile;
+    settingsButton.disabled = !hasFile;
+    
+    // 更新按钮样式
+    if (hasFile) {
+        smartButton.style.opacity = '1';
+        settingsButton.style.opacity = '1';
+        smartButton.style.cursor = 'pointer';
+        settingsButton.style.cursor = 'pointer';
+    } else {
+        smartButton.style.opacity = '0.5';
+        settingsButton.style.opacity = '0.5';
+        smartButton.style.cursor = 'not-allowed';
+        settingsButton.style.cursor = 'not-allowed';
+    }
+    
+    logger.log('Button States', '按钮状态已更新:', { hasFile, smartDisabled: !hasFile, settingsDisabled: !hasFile });
+}
+
 // Update book info display in titlebar
 async function updateBookInfoDisplay() {
     try {
@@ -339,6 +369,7 @@ async function updateBookInfoDisplay() {
             // 没有文件时显示默认信息
             bookTitleDisplay.textContent = 'AI Book Reader';
             bookAuthorDisplay.textContent = '';
+            updateButtonStates();
             return;
         }
 
@@ -363,6 +394,7 @@ async function updateBookInfoDisplay() {
         // 更新显示
         bookTitleDisplay.textContent = bookTitle;
         bookAuthorDisplay.textContent = bookAuthor;
+        updateButtonStates();
         
         logger.log('Book Info', '更新书籍信息显示:', { title: bookTitle, author: bookAuthor });
     } catch (error) {
@@ -463,6 +495,11 @@ async function saveSettingsToFiles() {
 
 // Open settings modal
 settingsButton.addEventListener('click', async () => {
+    if (settingsButton.disabled) {
+        logger.log('Settings', '设置按钮被禁用，忽略点击');
+        return;
+    }
+    
     logger.log('Settings', '打开设置面板');
     await loadSettings();
     settingsModal.classList.add('show');

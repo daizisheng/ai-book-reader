@@ -95,7 +95,7 @@ function createWindow() {
     // 创建菜单
     const template = [
         {
-            label: '文件',
+            label: 'AI Book Reader',
             submenu: [
                 {
                     label: '打开文件',
