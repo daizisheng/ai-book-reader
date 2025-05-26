@@ -206,18 +206,63 @@ document.addEventListener('DOMContentLoaded', () => {
             logger.log('Right Webview', 'AI解读完成，书名:', bookName);
             
             // 显示完成通知
-            const notification = new Notification(`${bookName} 解读完成`, {
-                body: '可以回来阅读了',
-                silent: false
-            });
-            
-            // 可选：点击通知时聚焦窗口
-            notification.onclick = () => {
-                ipcRenderer.send('focus-window');
-            };
-            
-            logger.log('Right Webview', '已显示解读完成通知');
+            showCompletionNotification(bookName);
         }
+    });
+    
+    // 显示完成通知的函数
+    function showCompletionNotification(bookName) {
+        logger.log('Notification', '准备显示解读完成通知，书名:', bookName);
+        
+        const notification = new Notification(`《${bookName}》解读完成了`, {
+            body: '可以回来查看了',
+            silent: false,
+            requireInteraction: true, // 需要用户交互才会消失
+            tag: 'ai-explanation-complete' // 防止重复通知
+        });
+        
+        // 点击通知时聚焦窗口
+        notification.onclick = () => {
+            logger.log('Notification', '用户点击了解读完成通知');
+            ipcRenderer.send('focus-window');
+            notification.close(); // 关闭通知
+        };
+        
+        // 通知显示时的回调
+        notification.onshow = () => {
+            logger.log('Notification', '解读完成通知已显示');
+        };
+        
+        // 通知错误时的回调
+        notification.onerror = (error) => {
+            logger.error('Notification', '通知显示失败:', error);
+        };
+        
+        logger.log('Right Webview', '已创建解读完成通知');
+    }
+    
+    // 监听来自 webview 的自定义事件（备用方法）
+    rightWebview.addEventListener('dom-ready', () => {
+        // 注入监听脚本到webview中
+        const listenerScript = `
+            window.addEventListener('ai-explanation-complete', (event) => {
+                console.log('收到AI完成事件:', event.detail);
+                // 通过ipcRenderer发送到主进程
+                try {
+                    if (window.require) {
+                        const { ipcRenderer } = window.require('electron');
+                        ipcRenderer.sendToHost('ai-explanation-complete', event.detail.bookName);
+                        console.log('通过自定义事件发送完成通知');
+                    }
+                } catch (error) {
+                    console.log('自定义事件IPC发送失败:', error);
+                }
+            });
+        `;
+        
+        rightWebview.executeJavaScript(listenerScript).catch(error => {
+            logger.warn('Right Webview', '注入监听脚本失败:', error);
+        });
     });
 });
 
@@ -373,6 +418,13 @@ smartButton.addEventListener('click', async () => {
                     silent: true
                 });
                 return; // 提前返回，等待解读完成通知
+            } else if (result === 'monitoring_timeout') {
+                logger.warn('Smart Button', 'AI解读完成监控超时');
+                const timeoutNotification = new Notification('监控超时', {
+                    body: 'AI解读监控超时，请手动检查ChatGPT页面',
+                    silent: true
+                });
+                return;
             } else {
                 logger.warn('Smart Button', '操作过程中出现问题:', result);
             }

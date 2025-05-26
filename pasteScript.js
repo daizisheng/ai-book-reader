@@ -46,6 +46,70 @@
             return null;
         }
         
+        // 监控AI完成状态的函数
+        async function waitForAICompletion(bookName) {
+            console.log('开始监控AI完成状态...');
+            const maxWaitTime = 300000; // 5分钟最大等待时间
+            const checkInterval = 2000; // 每2秒检查一次
+            const startTime = Date.now();
+            
+            return new Promise((resolve) => {
+                const checkCompletion = () => {
+                    const currentTime = Date.now();
+                    
+                    // 检查是否超时
+                    if (currentTime - startTime > maxWaitTime) {
+                        console.log('监控超时，停止等待');
+                        resolve(false);
+                        return;
+                    }
+                    
+                    // 检查停止按钮是否还存在
+                    const stopButton = findButton(buttonSelectors.stopButtons, '停止');
+                    
+                    if (!stopButton) {
+                        // 停止按钮消失，说明AI完成了
+                        console.log('AI解读完成，发送通知');
+                        
+                                                 // 通过IPC发送完成通知给主进程
+                         try {
+                             // Electron webview环境 - 使用ipcRenderer
+                             if (window.require) {
+                                 const { ipcRenderer } = window.require('electron');
+                                 ipcRenderer.sendToHost('ai-explanation-complete', bookName);
+                                 console.log('通过ipcRenderer发送完成通知');
+                             } else {
+                                 console.log('ipcRenderer不可用，尝试其他方法');
+                             }
+                         } catch (error) {
+                             console.log('IPC消息发送失败:', error);
+                         }
+                         
+                         // 备用方法：使用自定义事件
+                         try {
+                             const event = new CustomEvent('ai-explanation-complete', {
+                                 detail: { bookName: bookName }
+                             });
+                             window.dispatchEvent(event);
+                             console.log('发送自定义事件完成');
+                         } catch (error) {
+                             console.log('自定义事件发送失败:', error);
+                         }
+                        
+                        resolve(true);
+                        return;
+                    }
+                    
+                    // 继续监控
+                    console.log('AI仍在工作，继续监控...');
+                    setTimeout(checkCompletion, checkInterval);
+                };
+                
+                // 开始第一次检查
+                setTimeout(checkCompletion, checkInterval);
+            });
+        }
+        
         // 步骤1: 检查ChatGPT当前状态
         console.log('步骤1: 检查ChatGPT当前状态...');
         
@@ -160,7 +224,21 @@
         sendButton.click();
         console.log('已点击发送按钮');
         
-        return true;
+        // 获取书名用于通知
+        const bookName = 'BOOK_NAME_PLACEHOLDER';
+        
+        // 开始监控AI完成状态
+        console.log('开始监控AI解读完成状态...');
+        const completed = await waitForAICompletion(bookName);
+        
+        if (completed) {
+            console.log('AI解读完成监控成功');
+            return 'explanation_complete';
+        } else {
+            console.log('AI解读完成监控超时');
+            return 'monitoring_timeout';
+        }
+        
     } catch (error) {
         console.error('操作错误:', error);
         return error.message;
