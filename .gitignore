@@ -12,6 +12,15 @@ package-lock.json
 *.swp
 *.swo
 
+# Build output
+dist/
+*.dmg
+*.exe
+*.deb
+*.AppImage
+*.zip
+*.blockmap
+
 # OS
 .DS_Store
 Thumbs.db 

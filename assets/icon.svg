@@ -1,0 +1,42 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bookGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4A90E2;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#357ABD;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="aiGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#FF6B6B;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#E55555;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background circle -->
+  <circle cx="256" cy="256" r="240" fill="url(#bookGradient)" stroke="#2C3E50" stroke-width="8"/>
+  
+  <!-- Book shape -->
+  <rect x="160" y="180" width="120" height="160" rx="8" fill="#FFFFFF" stroke="#2C3E50" stroke-width="3"/>
+  <rect x="280" y="180" width="120" height="160" rx="8" fill="#F8F9FA" stroke="#2C3E50" stroke-width="3"/>
+  
+  <!-- Book spine -->
+  <rect x="275" y="180" width="10" height="160" fill="#2C3E50"/>
+  
+  <!-- Book pages lines -->
+  <line x1="180" y1="210" x2="260" y2="210" stroke="#BDC3C7" stroke-width="2"/>
+  <line x1="180" y1="230" x2="260" y2="230" stroke="#BDC3C7" stroke-width="2"/>
+  <line x1="180" y1="250" x2="260" y2="250" stroke="#BDC3C7" stroke-width="2"/>
+  <line x1="300" y1="210" x2="380" y2="210" stroke="#BDC3C7" stroke-width="2"/>
+  <line x1="300" y1="230" x2="380" y2="230" stroke="#BDC3C7" stroke-width="2"/>
+  <line x1="300" y1="250" x2="380" y2="250" stroke="#BDC3C7" stroke-width="2"/>
+  
+  <!-- AI brain/circuit symbol -->
+  <circle cx="340" cy="140" r="25" fill="url(#aiGradient)" stroke="#FFFFFF" stroke-width="3"/>
+  <circle cx="330" cy="135" r="3" fill="#FFFFFF"/>
+  <circle cx="350" cy="135" r="3" fill="#FFFFFF"/>
+  <circle cx="340" cy="150" r="3" fill="#FFFFFF"/>
+  <line x1="330" y1="135" x2="340" y2="150" stroke="#FFFFFF" stroke-width="2"/>
+  <line x1="350" y1="135" x2="340" y2="150" stroke="#FFFFFF" stroke-width="2"/>
+  
+  <!-- AI text -->
+  <text x="256" y="400" font-family="Arial, sans-serif" font-size="36" font-weight="bold" text-anchor="middle" fill="#FFFFFF">AI</text>
+  <text x="256" y="430" font-family="Arial, sans-serif" font-size="20" text-anchor="middle" fill="#FFFFFF">READER</text>
+</svg> 

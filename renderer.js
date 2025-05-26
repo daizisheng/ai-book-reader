@@ -177,9 +177,37 @@ rightWebview.addEventListener('dom-ready', () => {
     }
 });
 
+// 请求通知权限的函数
+async function requestNotificationPermission() {
+    if (!("Notification" in window)) {
+        logger.warn('Notification', '此浏览器不支持通知');
+        return false;
+    }
+    
+    let permission = Notification.permission;
+    logger.log('Notification', '当前通知权限状态:', permission);
+    
+    if (permission === "default") {
+        logger.log('Notification', '请求通知权限...');
+        permission = await Notification.requestPermission();
+        logger.log('Notification', '通知权限请求结果:', permission);
+    }
+    
+    if (permission === "granted") {
+        logger.log('Notification', '通知权限已获得');
+        return true;
+    } else {
+        logger.warn('Notification', '通知权限被拒绝');
+        return false;
+    }
+}
+
 // 等待 DOM 完全加载
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     logger.log('App', 'DOM 完全加载完成');
+    
+    // 请求通知权限
+    await requestNotificationPermission();
     
     // 初始化按钮状态
     updateButtonStates();
@@ -189,7 +217,53 @@ document.addEventListener('DOMContentLoaded', () => {
         // 检查是否是快捷键组合
         const isCtrlOrCmd = event.ctrlKey || event.metaKey;
         
+        // ESC键不需要修饰符，单独处理
+        if (event.key === 'Escape') {
+            const isSettingsModalOpen = settingsModal && settingsModal.classList.contains('show');
+            if (isSettingsModalOpen) {
+                logger.log('Settings Modal', 'ESC键关闭设置模态框');
+                closeSettingsModal();
+                event.preventDefault();
+                event.stopPropagation();
+                return;
+            }
+        }
+        
         if (!isCtrlOrCmd) return;
+        
+        // 检查设置模态框是否打开
+        const isSettingsModalOpen = settingsModal && settingsModal.classList.contains('show');
+        
+        // 检查当前焦点是否在输入框或文本区域
+        const activeElement = document.activeElement;
+        const isInputElement = activeElement && (
+            activeElement.tagName === 'INPUT' || 
+            activeElement.tagName === 'TEXTAREA' || 
+            activeElement.contentEditable === 'true'
+        );
+        
+        // 如果设置模态框打开且焦点在输入框中，允许标准快捷键正常工作
+        if (isSettingsModalOpen && isInputElement) {
+            logger.log('Settings Modal', '设置模态框中的输入框，允许标准快捷键');
+            // 对于文本编辑快捷键，让浏览器处理
+            switch (event.key.toLowerCase()) {
+                case 'c':
+                case 'v':
+                case 'x':
+                case 'a':
+                    logger.log('Settings Modal', `允许 Ctrl+${event.key.toUpperCase()} 在输入框中执行`);
+                    return; // 不阻止默认行为
+                case 'z':
+                    if (event.shiftKey) {
+                        logger.log('Settings Modal', '允许 Ctrl+Shift+Z 重做在输入框中执行');
+                    } else {
+                        logger.log('Settings Modal', '允许 Ctrl+Z 撤销在输入框中执行');
+                    }
+                    return; // 不阻止默认行为
+                default:
+                    break;
+            }
+        }
         
         // 防止默认行为，让我们的处理器接管
         let handled = false;
@@ -198,6 +272,10 @@ document.addEventListener('DOMContentLoaded', () => {
             case 'c':
                 if (!event.shiftKey) {
                     logger.log('Keyboard Shortcut', 'Ctrl+C 复制');
+                    if (isSettingsModalOpen && !isInputElement) {
+                        // 设置模态框打开但不在输入框中，不处理
+                        return;
+                    }
                     executeWebviewCommand(getFocusedWebview(), 'copy');
                     handled = true;
                 }
@@ -205,6 +283,10 @@ document.addEventListener('DOMContentLoaded', () => {
             case 'v':
                 if (!event.shiftKey) {
                     logger.log('Keyboard Shortcut', 'Ctrl+V 粘贴');
+                    if (isSettingsModalOpen && !isInputElement) {
+                        // 设置模态框打开但不在输入框中，不处理
+                        return;
+                    }
                     executeWebviewCommand(getFocusedWebview(), 'paste');
                     handled = true;
                 }
@@ -212,6 +294,10 @@ document.addEventListener('DOMContentLoaded', () => {
             case 'x':
                 if (!event.shiftKey) {
                     logger.log('Keyboard Shortcut', 'Ctrl+X 剪切');
+                    if (isSettingsModalOpen && !isInputElement) {
+                        // 设置模态框打开但不在输入框中，不处理
+                        return;
+                    }
                     executeWebviewCommand(getFocusedWebview(), 'cut');
                     handled = true;
                 }
@@ -219,6 +305,10 @@ document.addEventListener('DOMContentLoaded', () => {
             case 'a':
                 if (!event.shiftKey) {
                     logger.log('Keyboard Shortcut', 'Ctrl+A 全选');
+                    if (isSettingsModalOpen && !isInputElement) {
+                        // 设置模态框打开但不在输入框中，不处理
+                        return;
+                    }
                     executeWebviewCommand(getFocusedWebview(), 'selectAll');
                     handled = true;
                 }
@@ -226,10 +316,18 @@ document.addEventListener('DOMContentLoaded', () => {
             case 'z':
                 if (event.shiftKey) {
                     logger.log('Keyboard Shortcut', 'Ctrl+Shift+Z 重做');
+                    if (isSettingsModalOpen && !isInputElement) {
+                        // 设置模态框打开但不在输入框中，不处理
+                        return;
+                    }
                     executeWebviewCommand(getFocusedWebview(), 'redo');
                     handled = true;
                 } else {
                     logger.log('Keyboard Shortcut', 'Ctrl+Z 撤销');
+                    if (isSettingsModalOpen && !isInputElement) {
+                        // 设置模态框打开但不在输入框中，不处理
+                        return;
+                    }
                     executeWebviewCommand(getFocusedWebview(), 'undo');
                     handled = true;
                 }
@@ -237,30 +335,51 @@ document.addEventListener('DOMContentLoaded', () => {
             case 'r':
                 if (event.shiftKey) {
                     logger.log('Keyboard Shortcut', 'Ctrl+Shift+R 强制刷新');
+                    if (isSettingsModalOpen) {
+                        // 设置模态框打开时，不处理刷新快捷键
+                        return;
+                    }
                     executeWebviewCommand(getFocusedWebview(), 'reloadIgnoringCache');
                     handled = true;
                 } else {
                     logger.log('Keyboard Shortcut', 'Ctrl+R 刷新');
+                    if (isSettingsModalOpen) {
+                        // 设置模态框打开时，不处理刷新快捷键
+                        return;
+                    }
                     executeWebviewCommand(getFocusedWebview(), 'reload');
                     handled = true;
                 }
                 break;
             case '0':
                 logger.log('Keyboard Shortcut', 'Ctrl+0 重置缩放');
+                if (isSettingsModalOpen) {
+                    // 设置模态框打开时，不处理缩放快捷键
+                    return;
+                }
                 executeWebviewCommand(getFocusedWebview(), 'zoomReset');
                 handled = true;
                 break;
             case '=':
             case '+':
                 logger.log('Keyboard Shortcut', 'Ctrl++ 放大');
+                if (isSettingsModalOpen) {
+                    // 设置模态框打开时，不处理缩放快捷键
+                    return;
+                }
                 executeWebviewCommand(getFocusedWebview(), 'zoomIn');
                 handled = true;
                 break;
             case '-':
                 logger.log('Keyboard Shortcut', 'Ctrl+- 缩小');
+                if (isSettingsModalOpen) {
+                    // 设置模态框打开时，不处理缩放快捷键
+                    return;
+                }
                 executeWebviewCommand(getFocusedWebview(), 'zoomOut');
                 handled = true;
                 break;
+
         }
         
         if (handled) {
@@ -312,34 +431,63 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     
     // 显示完成通知的函数
-    function showCompletionNotification(bookName) {
+    async function showCompletionNotification(bookName) {
         logger.log('Notification', '准备显示解读完成通知，书名:', bookName);
         
-        const notification = new Notification(`《${bookName}》解读完成了`, {
-            body: '可以回来查看了',
-            silent: false,
-            requireInteraction: true, // 需要用户交互才会消失
-            tag: 'ai-explanation-complete' // 防止重复通知
-        });
+        // 检查通知权限
+        if (!("Notification" in window)) {
+            logger.error('Notification', '此浏览器不支持通知');
+            return;
+        }
         
-        // 点击通知时聚焦窗口
-        notification.onclick = () => {
-            logger.log('Notification', '用户点击了解读完成通知');
-            ipcRenderer.send('focus-window');
-            notification.close(); // 关闭通知
-        };
+        // 请求通知权限
+        let permission = Notification.permission;
+        logger.log('Notification', '当前通知权限状态:', permission);
         
-        // 通知显示时的回调
-        notification.onshow = () => {
-            logger.log('Notification', '解读完成通知已显示');
-        };
+        if (permission === "default") {
+            logger.log('Notification', '请求通知权限...');
+            permission = await Notification.requestPermission();
+            logger.log('Notification', '通知权限请求结果:', permission);
+        }
         
-        // 通知错误时的回调
-        notification.onerror = (error) => {
-            logger.error('Notification', '通知显示失败:', error);
-        };
+        if (permission !== "granted") {
+            logger.warn('Notification', '通知权限被拒绝，权限状态:', permission);
+            // 即使没有权限，也在控制台显示消息
+            console.log(`🎉 《${bookName}》解读完成了！可以回来查看了`);
+            return;
+        }
         
-        logger.log('Right Webview', '已创建解读完成通知');
+        try {
+            const notification = new Notification(`《${bookName}》解读完成了`, {
+                body: '可以回来查看了',
+                silent: false,
+                requireInteraction: true, // 需要用户交互才会消失
+                tag: 'ai-explanation-complete' // 防止重复通知
+            });
+            
+            // 点击通知时聚焦窗口
+            notification.onclick = () => {
+                logger.log('Notification', '用户点击了解读完成通知');
+                ipcRenderer.send('focus-window');
+                notification.close(); // 关闭通知
+            };
+            
+            // 通知显示时的回调
+            notification.onshow = () => {
+                logger.log('Notification', '解读完成通知已显示');
+            };
+            
+            // 通知错误时的回调
+            notification.onerror = (error) => {
+                logger.error('Notification', '通知显示失败:', error);
+            };
+            
+            logger.log('Right Webview', '已创建解读完成通知');
+        } catch (error) {
+            logger.error('Notification', '创建通知失败:', error);
+            // 备用方案：在控制台显示消息
+            console.log(`🎉 《${bookName}》解读完成了！可以回来查看了`);
+        }
     }
     
     // 监听来自 webview 的自定义事件（备用方法）

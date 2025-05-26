@@ -211,12 +211,11 @@
         
         // 发送IPC消息通知主进程
         try {
-            if (window.require) {
-                const { ipcRenderer } = window.require('electron');
-                ipcRenderer.sendToHost('ai-explanation-complete', bookName);
-                console.log('已通过ipcRenderer发送完成通知');
+            if (window.sendToMain) {
+                window.sendToMain('ai-explanation-complete', bookName);
+                console.log('已通过sendToMain发送完成通知');
             } else {
-                console.log('ipcRenderer不可用');
+                console.log('sendToMain不可用');
             }
         } catch (error) {
             console.log('IPC消息发送失败:', error);

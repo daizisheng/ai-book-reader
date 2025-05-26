@@ -12,6 +12,8 @@
 
 ## 安装
 
+### 开发环境
+
 ```bash
 # 克隆仓库
 git clone https://github.com/yourusername/ai-book-reader.git
@@ -23,6 +25,29 @@ npm install
 # 运行应用
 npm start
 ```
+
+### 构建独立应用
+
+```bash
+# 构建当前平台
+npm run build-app
+
+# 构建 macOS 版本
+npm run build-app:mac
+
+# 构建 Windows 版本
+npm run build-app:win
+
+# 构建 Linux 版本
+npm run build-app:linux
+
+# 构建所有平台
+npm run build-app:all
+```
+
+构建完成后，可分发的应用程序文件将位于 `dist/` 目录中。
+
+详细的构建说明请参考 [BUILD.md](BUILD.md)。
 
 ## 使用说明
 
