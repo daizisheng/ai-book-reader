@@ -129,7 +129,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // 监听来自主进程的消息
-ipcRenderer.on('file-opened', (event, filePath) => {
+ipcRenderer.on('file-opened', async (event, filePath) => {
     logger.log('File Opened', '收到文件打开请求:', filePath);
     // 检查文件是否存在
     if (fs.existsSync(filePath)) {
@@ -140,6 +140,11 @@ ipcRenderer.on('file-opened', (event, filePath) => {
         // 在左侧 webview 中加载 PDF
         leftWebview.loadURL(fileUrl);
         logger.log('File Opened', '已发送加载请求到左侧面板');
+        
+        // Update current file info for settings
+        currentFilePath = filePath;
+        currentFileMD5 = await generateFileMD5(filePath);
+        logger.log('Settings', '文件已打开，MD5:', currentFileMD5);
     } else {
         logger.warn('File Opened', '文件不存在:', filePath);
     }
@@ -174,130 +179,20 @@ smartButton.addEventListener('click', async () => {
         if (isChatGPT) {
             logger.log('Smart Button', '正在将截图粘贴到 ChatGPT 输入框...');
             
-            // 注入 JavaScript 来查找输入框并粘贴
-            const pasteScript = `
-                (async () => {
-                    try {
-                        console.log('=== 开始智能解释流程 ===');
-                        
-                        // 步骤1: 检查是否有正在进行的对话（通过检查停止按钮）
-                        console.log('步骤1: 检查AI是否正在工作...');
-                        
-                        // 检查是否有停止按钮（表示AI正在生成回复）
-                        const stopButton = document.querySelector('button[aria-label*="停止"]') ||
-                                         document.querySelector('button[aria-label*="Stop"]') ||
-                                         document.querySelector('button[data-testid*="stop"]') ||
-                                         document.querySelector('button:has(svg) [d*="M6 6h12v12H6z"]'); // 停止图标的路径
-                        
-                        if (stopButton) {
-                            console.log('检测到停止按钮，AI正在工作');
-                            return 'ai_working';
-                        }
-                        
-                        console.log('AI未在工作，继续执行...');
-                        
-                        // 等待页面完全加载
-                        if (document.readyState !== 'complete') {
-                            await new Promise(resolve => window.addEventListener('load', resolve));
-                        }
-                        
-                        // 查找 ProseMirror 编辑器
-                        const editor = document.querySelector('.ProseMirror[contenteditable="true"]');
-                        if (!editor) {
-                            throw new Error('找不到 ChatGPT 输入框');
-                        }
-                        
-                        // 聚焦编辑器
-                        editor.focus();
-                        
-                        // 方法1: 使用 execCommand
-                        document.execCommand('paste');
-                        
-                        // 方法2: 使用 Clipboard API
-                        try {
-                            const clipboardItems = await navigator.clipboard.read();
-                            for (const item of clipboardItems) {
-                                if (item.types.includes('image/png')) {
-                                    const blob = await item.getType('image/png');
-                                    const img = document.createElement('img');
-                                    img.src = URL.createObjectURL(blob);
-                                    editor.appendChild(img);
-                                }
-                            }
-                        } catch (clipboardError) {
-                            console.log('Clipboard API 失败，尝试其他方法');
-                        }
-                        
-                        // 方法3: 模拟键盘事件
-                        const pasteEvent = new KeyboardEvent('keydown', {
-                            key: 'v',
-                            code: 'KeyV',
-                            ctrlKey: true,
-                            bubbles: true,
-                            cancelable: true
-                        });
-                        editor.dispatchEvent(pasteEvent);
-                        
-                        // 方法4: 模拟粘贴事件
-                        const pasteEvent2 = new ClipboardEvent('paste', {
-                            clipboardData: new DataTransfer(),
-                            bubbles: true,
-                            cancelable: true
-                        });
-                        editor.dispatchEvent(pasteEvent2);
-
-                        // 等待图片上传完成
-                        console.log('等待图片上传...');
-                        await new Promise(resolve => setTimeout(resolve, 5000));
-                        console.log('图片上传等待完成');
-
-                        // 添加提示文本
-                        const promptText = '请解释本页内容，要用中文';
-                        const textNode = document.createTextNode(promptText);
-                        editor.appendChild(textNode);
-
-                        // 触发输入事件以确保 ChatGPT 识别到文本变化
-                        const inputEvent = new Event('input', {
-                            bubbles: true,
-                            cancelable: true
-                        });
-                        editor.dispatchEvent(inputEvent);
-
-                        // 等待一小段时间让 ChatGPT 处理输入
-                        await new Promise(resolve => setTimeout(resolve, 1000));
-
-                        // 查找发送按钮
-                        const sendButton = document.querySelector('button[data-testid="send-button"]');
-                        if (!sendButton) {
-                            throw new Error('找不到发送按钮');
-                        }
-
-                        // 检查按钮是否可用
-                        if (sendButton.disabled) {
-                            console.log('发送按钮当前不可用，等待按钮可用...');
-                            // 等待按钮可用
-                            let attempts = 0;
-                            while (sendButton.disabled && attempts < 10) {
-                                await new Promise(resolve => setTimeout(resolve, 1000));
-                                attempts++;
-                                console.log('等待按钮可用，尝试次数: ' + attempts);
-                            }
-                            if (sendButton.disabled) {
-                                throw new Error('发送按钮在等待后仍然不可用');
-                            }
-                        }
-
-                        // 点击发送按钮
-                        sendButton.click();
-                        console.log('已点击发送按钮');
-                        
-                        return true;
-                    } catch (error) {
-                        console.error('操作错误:', error);
-                        return error.message;
-                    }
-                })();
-            `;
+            // 获取当前解释提示词
+            const currentPrompt = await getCurrentExplainPrompt();
+            logger.log('Smart Button', '使用提示词:', currentPrompt);
+            
+            // 读取外部脚本文件
+            let pasteScript;
+            try {
+                pasteScript = fs.readFileSync(path.join(__dirname, 'pasteScript.js'), 'utf8');
+                // 替换占位符为实际的提示词
+                pasteScript = pasteScript.replace('PROMPT_PLACEHOLDER', currentPrompt);
+            } catch (error) {
+                logger.error('Smart Button', '读取粘贴脚本失败:', error);
+                throw new Error('无法加载粘贴脚本');
+            }
             
             // 执行脚本
             const result = await rightWebview.executeJavaScript(pasteScript);
@@ -342,3 +237,58 @@ smartButton.addEventListener('click', async () => {
         logger.log('Smart Button', '已显示错误通知');
     }
 }); 
+
+// Get current explain prompt from settings
+async function getCurrentExplainPrompt() {
+    try {
+        // 优先级1: 书籍专用提示词
+        if (currentFilePath && currentFileMD5) {
+            const bookSettings = await ipcRenderer.invoke('load-book-settings', currentFileMD5);
+            if (bookSettings && bookSettings.explainPrompt && bookSettings.explainPrompt.trim()) {
+                logger.log('Settings', '使用书籍专用提示词');
+                return bookSettings.explainPrompt.trim();
+            }
+        }
+        
+        // 优先级2: 全局设置中的解释提示词
+        try {
+            const globalSettings = await ipcRenderer.invoke('load-global-settings');
+            if (globalSettings && globalSettings.explainPrompt && globalSettings.explainPrompt.trim()) {
+                logger.log('Settings', '使用全局解释提示词');
+                return globalSettings.explainPrompt.trim();
+            }
+        } catch (globalError) {
+            logger.warn('Settings', '获取全局设置失败:', globalError);
+        }
+        
+        // 优先级3: 配置文件中的默认提示词
+        if (typeof DEFAULT_CONFIG !== 'undefined' && DEFAULT_CONFIG.defaultExplainPrompt) {
+            logger.log('Settings', '使用配置文件中的默认提示词');
+            return DEFAULT_CONFIG.defaultExplainPrompt;
+        }
+        
+        // 最后的备选方案
+        logger.log('Settings', '使用硬编码默认提示词');
+        return '请用中文解释本页内容';
+    } catch (error) {
+        logger.error('Settings', '获取解释提示词失败:', error);
+        return '请用中文解释本页内容';
+    }
+}
+
+// Generate MD5 hash for file
+async function generateFileMD5(filePath) {
+    try {
+        const crypto = require('crypto');
+        const fileBuffer = fs.readFileSync(filePath);
+        const hash = crypto.createHash('md5').update(fileBuffer).digest('hex');
+        return hash;
+    } catch (error) {
+        logger.error('Settings', '生成文件 MD5 失败:', error);
+        return null;
+    }
+}
+
+// Current file path and MD5 for book-specific settings
+let currentFilePath = null;
+let currentFileMD5 = null;

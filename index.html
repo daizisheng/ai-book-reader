@@ -32,26 +32,28 @@
 
         .smart-button {
             -webkit-app-region: no-drag;
-            background-color: #4CAF50;
-            color: white;
+            background: none;
+            color: #e0e0e0;
             border: none;
-            padding: 4px 12px;
+            padding: 6px;
             border-radius: 4px;
             cursor: pointer;
             font-size: 12px;
-            margin-right: 10px;
+            margin-left: 6px;
             display: flex;
             align-items: center;
-            gap: 4px;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
         }
 
         .smart-button:hover {
-            background-color: #45a049;
+            background-color: rgba(224, 224, 224, 0.1);
         }
 
         .smart-button svg {
-            width: 14px;
-            height: 14px;
+            width: 16px;
+            height: 16px;
         }
 
         .main-content {
@@ -272,6 +274,11 @@
 </head>
 <body>
     <div class="titlebar">
+        <button class="smart-button" id="smartButton">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+            </svg>
+        </button>
         <button class="smart-button" id="settingsButton">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="12" cy="12" r="3"/>
@@ -284,13 +291,6 @@
                 <path d="M19.78 4.22l-4.24 4.24"/>
                 <path d="M8.46 15.54l-4.24 4.24"/>
             </svg>
-            设置
-        </button>
-        <button class="smart-button" id="smartButton">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-            </svg>
-            解释本页
         </button>
     </div>
     <div class="main-content">
@@ -352,6 +352,7 @@
         </div>
     </div>
 
+    <script src="config.js"></script>
     <script src="renderer.js"></script>
 </body>
 </html> 
