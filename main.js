@@ -239,4 +239,66 @@ app.on('will-quit', (event) => {
             quotas: ['temporary']
         });
     }
-}); 
+});
+
+// Settings IPC handlers
+const booksJsonPath = path.join(dataDir, 'books.json');
+const globalJsonPath = path.join(dataDir, 'global.json');
+
+// Load global settings
+ipcMain.handle('load-global-settings', async () => {
+    try {
+        if (fs.existsSync(globalJsonPath)) {
+            const data = fs.readFileSync(globalJsonPath, 'utf8');
+            return JSON.parse(data);
+        }
+        return null;
+    } catch (error) {
+        console.error('Error loading global settings:', error);
+        return null;
+    }
+});
+
+// Save global settings
+ipcMain.handle('save-global-settings', async (event, settings) => {
+    try {
+        fs.writeFileSync(globalJsonPath, JSON.stringify(settings, null, 2), 'utf8');
+        return true;
+    } catch (error) {
+        console.error('Error saving global settings:', error);
+        return false;
+    }
+});
+
+// Load book settings
+ipcMain.handle('load-book-settings', async (event, fileMD5) => {
+    try {
+        if (fs.existsSync(booksJsonPath)) {
+            const data = fs.readFileSync(booksJsonPath, 'utf8');
+            const books = JSON.parse(data);
+            return books[fileMD5] || null;
+        }
+        return null;
+    } catch (error) {
+        console.error('Error loading book settings:', error);
+        return null;
+    }
+});
+
+// Save book settings
+ipcMain.handle('save-book-settings', async (event, fileMD5, settings) => {
+    try {
+        let books = {};
+        if (fs.existsSync(booksJsonPath)) {
+            const data = fs.readFileSync(booksJsonPath, 'utf8');
+            books = JSON.parse(data);
+        }
+        
+        books[fileMD5] = settings;
+        fs.writeFileSync(booksJsonPath, JSON.stringify(books, null, 2), 'utf8');
+        return true;
+    } catch (error) {
+        console.error('Error saving book settings:', error);
+        return false;
+    }
+});

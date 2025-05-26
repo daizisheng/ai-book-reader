@@ -98,15 +98,199 @@
         ::-webkit-scrollbar-thumb:hover {
             background: #5d5d5d;
         }
+
+        /* Settings Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+        }
+
+        .modal-overlay.show {
+            display: flex;
+        }
+
+        .modal {
+            background-color: #2d2d2d;
+            border-radius: 8px;
+            padding: 24px;
+            width: 500px;
+            max-width: 90vw;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #3d3d3d;
+        }
+
+        .modal-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #e0e0e0;
+            margin: 0;
+        }
+
+        .close-button {
+            background: none;
+            border: none;
+            color: #999;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 0;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .close-button:hover {
+            color: #e0e0e0;
+        }
+
+        .settings-section {
+            margin-bottom: 24px;
+        }
+
+        .section-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #e0e0e0;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #3d3d3d;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 14px;
+            color: #b0b0b0;
+            margin-bottom: 6px;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 8px 12px;
+            background-color: #1e1e1e;
+            border: 1px solid #3d3d3d;
+            border-radius: 4px;
+            color: #e0e0e0;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: #4CAF50;
+        }
+
+        .form-textarea {
+            width: 100%;
+            padding: 8px 12px;
+            background-color: #1e1e1e;
+            border: 1px solid #3d3d3d;
+            border-radius: 4px;
+            color: #e0e0e0;
+            font-size: 14px;
+            min-height: 80px;
+            resize: vertical;
+            box-sizing: border-box;
+            font-family: inherit;
+        }
+
+        .form-textarea:focus {
+            outline: none;
+            border-color: #4CAF50;
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .form-checkbox {
+            width: 16px;
+            height: 16px;
+            accent-color: #4CAF50;
+        }
+
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+            margin-top: 24px;
+            padding-top: 16px;
+            border-top: 1px solid #3d3d3d;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .btn-primary {
+            background-color: #4CAF50;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: #45a049;
+        }
+
+        .btn-secondary {
+            background-color: #3d3d3d;
+            color: #e0e0e0;
+        }
+
+        .btn-secondary:hover {
+            background-color: #4d4d4d;
+        }
     </style>
 </head>
 <body>
     <div class="titlebar">
+        <button class="smart-button" id="settingsButton">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M12 1v6"/>
+                <path d="M12 17v6"/>
+                <path d="M1 12h6"/>
+                <path d="M17 12h6"/>
+                <path d="M4.22 4.22l4.24 4.24"/>
+                <path d="M15.54 15.54l4.24 4.24"/>
+                <path d="M19.78 4.22l-4.24 4.24"/>
+                <path d="M8.46 15.54l-4.24 4.24"/>
+            </svg>
+            设置
+        </button>
         <button class="smart-button" id="smartButton">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
             </svg>
-            Smart
+            解释本页
         </button>
     </div>
     <div class="main-content">
@@ -117,6 +301,57 @@
             <webview id="rightWebview" src="about:blank"></webview>
         </div>
     </div>
+
+    <!-- Settings Modal -->
+    <div class="modal-overlay" id="settingsModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 class="modal-title">设置</h2>
+                <button class="close-button" id="closeModal">&times;</button>
+            </div>
+            
+            <div class="settings-section">
+                <h3 class="section-title">本书设置</h3>
+                
+                <div class="form-group">
+                    <label class="form-label" for="bookTitle">书名</label>
+                    <input type="text" id="bookTitle" class="form-input" placeholder="请输入书名">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label" for="bookAuthor">作者</label>
+                    <input type="text" id="bookAuthor" class="form-input" placeholder="请输入作者">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label" for="explainPrompt">解释按钮的提示词</label>
+                    <textarea id="explainPrompt" class="form-textarea" placeholder="请用中文解释本页内容">请用中文解释本页内容</textarea>
+                </div>
+            </div>
+            
+            <div class="settings-section">
+                <h3 class="section-title">全局设置</h3>
+                
+                <div class="form-group">
+                    <label class="form-label" for="startupPrompt">启动提示词</label>
+                    <textarea id="startupPrompt" class="form-textarea" placeholder="你是费曼，我将会逐页的给你上传书籍的截图，请你给我讲解每一页的内容">你是费曼，我将会逐页的给你上传书籍的截图，请你给我讲解每一页的内容</textarea>
+                </div>
+                
+                <div class="form-group">
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="enableNotifications" class="form-checkbox" checked>
+                        <label class="form-label" for="enableNotifications">允许解释完成通知</label>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancelSettings">取消</button>
+                <button class="btn btn-primary" id="saveSettings">保存</button>
+            </div>
+        </div>
+    </div>
+
     <script src="renderer.js"></script>
 </body>
 </html> 

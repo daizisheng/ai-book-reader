@@ -178,6 +178,24 @@ smartButton.addEventListener('click', async () => {
             const pasteScript = `
                 (async () => {
                     try {
+                        console.log('=== 开始智能解释流程 ===');
+                        
+                        // 步骤1: 检查是否有正在进行的对话（通过检查停止按钮）
+                        console.log('步骤1: 检查AI是否正在工作...');
+                        
+                        // 检查是否有停止按钮（表示AI正在生成回复）
+                        const stopButton = document.querySelector('button[aria-label*="停止"]') ||
+                                         document.querySelector('button[aria-label*="Stop"]') ||
+                                         document.querySelector('button[data-testid*="stop"]') ||
+                                         document.querySelector('button:has(svg) [d*="M6 6h12v12H6z"]'); // 停止图标的路径
+                        
+                        if (stopButton) {
+                            console.log('检测到停止按钮，AI正在工作');
+                            return 'ai_working';
+                        }
+                        
+                        console.log('AI未在工作，继续执行...');
+                        
                         // 等待页面完全加载
                         if (document.readyState !== 'complete') {
                             await new Promise(resolve => window.addEventListener('load', resolve));
@@ -285,6 +303,14 @@ smartButton.addEventListener('click', async () => {
             const result = await rightWebview.executeJavaScript(pasteScript);
             if (result === true) {
                 logger.log('Smart Button', '截图和提示文本已成功添加到 ChatGPT 并发送');
+            } else if (result === 'ai_working') {
+                logger.log('Smart Button', 'AI正在工作，等待完成');
+                // 显示等待通知
+                const waitNotification = new Notification('请稍等', {
+                    body: 'AI正在工作，请稍等...',
+                    silent: true
+                });
+                return; // 提前返回，不显示成功通知
             } else {
                 logger.warn('Smart Button', '操作过程中出现问题:', result);
             }
