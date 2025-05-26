@@ -31,10 +31,7 @@
     },
     "files": [
       "**/*",
-      "!node_modules/**/*",
-      "node_modules/electron-store/**/*",
-      "node_modules/jsdom/**/*",
-      "node_modules/yargs/**/*"
+      "!node_modules/**/*"
     ],
     "mac": {
       "category": "public.app-category.productivity",
