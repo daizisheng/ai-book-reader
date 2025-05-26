@@ -292,3 +292,133 @@ async function generateFileMD5(filePath) {
 // Current file path and MD5 for book-specific settings
 let currentFilePath = null;
 let currentFileMD5 = null;
+
+// Settings functionality
+const settingsModal = document.getElementById('settingsModal');
+const settingsButton = document.getElementById('settingsButton');
+const closeModal = document.getElementById('closeModal');
+const cancelSettings = document.getElementById('cancelSettings');
+const saveSettings = document.getElementById('saveSettings');
+
+// Form elements
+const bookTitle = document.getElementById('bookTitle');
+const bookAuthor = document.getElementById('bookAuthor');
+const explainPrompt = document.getElementById('explainPrompt');
+const startupPrompt = document.getElementById('startupPrompt');
+const enableNotifications = document.getElementById('enableNotifications');
+
+// Load settings from files
+async function loadSettings() {
+    try {
+        // Load global settings
+        const globalSettings = await ipcRenderer.invoke('load-global-settings');
+        if (globalSettings) {
+            startupPrompt.value = globalSettings.startupPrompt || (typeof DEFAULT_CONFIG !== 'undefined' ? DEFAULT_CONFIG.defaultStartupPrompt : '你是费曼，我将会逐页的给你上传书籍的截图，请你给我讲解每一页的内容');
+            enableNotifications.checked = globalSettings.enableNotifications !== false; // default to true
+            
+            // 如果全局设置中有解释提示词，设置为默认值
+            if (globalSettings.explainPrompt) {
+                explainPrompt.placeholder = globalSettings.explainPrompt;
+            }
+        } else {
+            // 使用配置文件中的默认值
+            if (typeof DEFAULT_CONFIG !== 'undefined') {
+                startupPrompt.value = DEFAULT_CONFIG.defaultStartupPrompt || '你是费曼，我将会逐页的给你上传书籍的截图，请你给我讲解每一页的内容';
+                explainPrompt.placeholder = DEFAULT_CONFIG.defaultExplainPrompt || '请用中文解释本页内容';
+            }
+        }
+
+        // Load book-specific settings if we have a current file
+        if (currentFilePath && currentFileMD5) {
+            const bookSettings = await ipcRenderer.invoke('load-book-settings', currentFileMD5);
+            if (bookSettings) {
+                bookTitle.value = bookSettings.title || '';
+                bookAuthor.value = bookSettings.author || '';
+                explainPrompt.value = bookSettings.explainPrompt || '';
+            } else {
+                // Set defaults for new book
+                bookTitle.value = '';
+                bookAuthor.value = '';
+                explainPrompt.value = '';
+            }
+        } else {
+            // 没有打开文件时，清空书籍设置
+            bookTitle.value = '';
+            bookAuthor.value = '';
+            explainPrompt.value = '';
+        }
+    } catch (error) {
+        logger.error('Settings', '加载设置失败:', error);
+    }
+}
+
+// Save settings to files
+async function saveSettingsToFiles() {
+    try {
+        // Save global settings
+        const globalSettings = {
+            startupPrompt: startupPrompt.value,
+            enableNotifications: enableNotifications.checked
+        };
+        await ipcRenderer.invoke('save-global-settings', globalSettings);
+
+        // Save book-specific settings if we have a current file
+        if (currentFilePath && currentFileMD5) {
+            const bookSettings = {
+                title: bookTitle.value,
+                author: bookAuthor.value,
+                explainPrompt: explainPrompt.value,
+                filePath: currentFilePath
+            };
+            await ipcRenderer.invoke('save-book-settings', currentFileMD5, bookSettings);
+        }
+
+        logger.log('Settings', '设置保存成功');
+        return true;
+    } catch (error) {
+        logger.error('Settings', '保存设置失败:', error);
+        return false;
+    }
+}
+
+// Open settings modal
+settingsButton.addEventListener('click', async () => {
+    logger.log('Settings', '打开设置面板');
+    await loadSettings();
+    settingsModal.classList.add('show');
+});
+
+// Close modal handlers
+function closeSettingsModal() {
+    settingsModal.classList.remove('show');
+}
+
+closeModal.addEventListener('click', closeSettingsModal);
+cancelSettings.addEventListener('click', closeSettingsModal);
+
+// Close modal when clicking outside
+settingsModal.addEventListener('click', (e) => {
+    if (e.target === settingsModal) {
+        closeSettingsModal();
+    }
+});
+
+// Save settings
+saveSettings.addEventListener('click', async () => {
+    logger.log('Settings', '保存设置');
+    const success = await saveSettingsToFiles();
+    if (success) {
+        closeSettingsModal();
+        // Show success notification
+        const notification = new Notification('设置保存成功', {
+            body: '您的设置已保存',
+            silent: true
+        });
+    } else {
+        // Show error notification
+        const notification = new Notification('设置保存失败', {
+            body: '保存设置时出现错误',
+            silent: true
+        });
+    }
+});
