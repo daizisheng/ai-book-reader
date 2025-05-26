@@ -36,11 +36,76 @@ const bookAuthorDisplay = document.getElementById('bookAuthorDisplay');
 // 设置 webview 的基本属性
 [leftWebview, rightWebview].forEach(webview => {
     webview.setAttribute('allowpopups', 'true');
-    webview.setAttribute('webpreferences', 'contextIsolation=no');
+    webview.setAttribute('webpreferences', 'contextIsolation=no,nodeIntegration=no,enableRemoteModule=no,sandbox=no,webSecurity=no,allowRunningInsecureContent=true');
     webview.setAttribute('preload', path.join(__dirname, 'preload.js'));
     // 设置两个 webview 共享同一个持久化会话
     webview.setAttribute('partition', 'persist:shared');
     webview.setAttribute('useragent', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
+    
+    // 为右侧 webview 启用上下文菜单
+    if (webview.id === 'rightWebview') {
+        // 监听上下文菜单事件并创建自定义菜单
+        webview.addEventListener('context-menu', (e) => {
+            logger.log('Right Webview', '上下文菜单请求:', e.params);
+            
+            // 发送上下文菜单请求到主进程
+            ipcRenderer.send('show-context-menu', {
+                x: e.params.x,
+                y: e.params.y,
+                canCopy: e.params.selectionText && e.params.selectionText.length > 0,
+                canPaste: e.params.editFlags && e.params.editFlags.canPaste,
+                canCut: e.params.editFlags && e.params.editFlags.canCut,
+                canUndo: e.params.editFlags && e.params.editFlags.canUndo,
+                canRedo: e.params.editFlags && e.params.editFlags.canRedo,
+                isEditable: e.params.isEditable,
+                selectionText: e.params.selectionText || '',
+                webviewId: 'rightWebview'
+            });
+        });
+        
+        // 监听来自主进程的菜单操作
+        ipcRenderer.on('context-menu-command', (event, command) => {
+            logger.log('Right Webview', '执行上下文菜单命令:', command);
+            
+            // 在 webview 中执行相应的命令
+            switch (command) {
+                case 'copy':
+                    webview.executeJavaScript('document.execCommand("copy")');
+                    break;
+                case 'paste':
+                    webview.executeJavaScript('document.execCommand("paste")');
+                    break;
+                case 'cut':
+                    webview.executeJavaScript('document.execCommand("cut")');
+                    break;
+                case 'undo':
+                    webview.executeJavaScript('document.execCommand("undo")');
+                    break;
+                case 'redo':
+                    webview.executeJavaScript('document.execCommand("redo")');
+                    break;
+                case 'selectAll':
+                    webview.executeJavaScript('document.execCommand("selectAll")');
+                    break;
+            }
+        });
+        
+        // 明确设置允许上下文菜单
+        webview.addEventListener('dom-ready', () => {
+            logger.log('Right Webview', '启用上下文菜单');
+            // 注入脚本来确保上下文菜单可用
+            webview.executeJavaScript(`
+                // 确保上下文菜单事件不被阻止
+                document.addEventListener('contextmenu', function(e) {
+                    console.log('Context menu event triggered');
+                    // 不调用 e.preventDefault()，允许显示菜单
+                }, true);
+                
+                // 添加一些调试信息
+                console.log('Context menu enabled for right webview');
+            `);
+        });
+    }
     
     // 监听 console 消息
     webview.addEventListener('console-message', (event) => {
@@ -130,6 +195,29 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
         logger.log('Right Webview', '正在使用系统浏览器打开链接');
         shell.openExternal(e.url);
+    });
+
+    // 监听来自 webview 的消息
+    rightWebview.addEventListener('ipc-message', (event) => {
+        logger.log('Right Webview', '收到 IPC 消息:', event.channel, event.args);
+        
+        if (event.channel === 'ai-explanation-complete') {
+            const bookName = event.args[0] || 'AI Book Reader';
+            logger.log('Right Webview', 'AI解读完成，书名:', bookName);
+            
+            // 显示完成通知
+            const notification = new Notification(`${bookName} 解读完成`, {
+                body: '可以回来阅读了',
+                silent: false
+            });
+            
+            // 可选：点击通知时聚焦窗口
+            notification.onclick = () => {
+                ipcRenderer.send('focus-window');
+            };
+            
+            logger.log('Right Webview', '已显示解读完成通知');
+        }
     });
 });
 
@@ -237,6 +325,29 @@ smartButton.addEventListener('click', async () => {
                 pasteScript = fs.readFileSync(path.join(__dirname, 'pasteScript.js'), 'utf8');
                 // 替换占位符为实际的提示词
                 pasteScript = pasteScript.replace('PROMPT_PLACEHOLDER', currentPrompt);
+                
+                // 获取当前书名用于通知
+                let bookName = 'AI Book Reader';
+                if (currentFilePath && currentFileMD5) {
+                    try {
+                        const bookSettings = await ipcRenderer.invoke('load-book-settings', currentFileMD5);
+                        if (bookSettings && bookSettings.title && bookSettings.title.trim()) {
+                            bookName = bookSettings.title.trim();
+                        } else {
+                            // 使用文件名作为书名
+                            const fileName = path.basename(currentFilePath, path.extname(currentFilePath));
+                            bookName = fileName.length > 20 ? fileName.substring(0, 20) + '...' : fileName;
+                        }
+                    } catch (settingsError) {
+                        logger.warn('Smart Button', '获取书名失败，使用文件名:', settingsError);
+                        const fileName = path.basename(currentFilePath, path.extname(currentFilePath));
+                        bookName = fileName.length > 20 ? fileName.substring(0, 20) + '...' : fileName;
+                    }
+                }
+                
+                // 替换书名占位符
+                pasteScript = pasteScript.replace('BOOK_NAME_PLACEHOLDER', bookName);
+                logger.log('Smart Button', '将使用书名:', bookName);
             } catch (error) {
                 logger.error('Smart Button', '读取粘贴脚本失败:', error);
                 throw new Error('无法加载粘贴脚本');
@@ -254,6 +365,14 @@ smartButton.addEventListener('click', async () => {
                     silent: true
                 });
                 return; // 提前返回，不显示成功通知
+            } else if (result === 'explanation_complete') {
+                logger.log('Smart Button', '截图和提示文本已成功添加到 ChatGPT 并发送，正在监控完成状态');
+                // 显示开始解读通知
+                const startNotification = new Notification('开始解读', {
+                    body: '正在解读页面内容，完成后会通知您',
+                    silent: true
+                });
+                return; // 提前返回，等待解读完成通知
             } else {
                 logger.warn('Smart Button', '操作过程中出现问题:', result);
             }

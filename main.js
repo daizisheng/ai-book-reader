@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Menu, dialog, session } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, dialog, session, MenuItem } = require('electron');
 const path = require('path');
 const Store = require('electron-store');
 const os = require('os');
@@ -10,6 +10,8 @@ const chromeDataDir = path.join(dataDir, 'chrome-data');
 
 // 设置整个 Electron 应用的数据目录
 app.setPath('userData', chromeDataDir);
+
+app.setName('AI Book Reader');
 
 // 确保数据目录存在并设置正确的权限
 if (!fs.existsSync(dataDir)) {
@@ -23,6 +25,10 @@ if (!fs.existsSync(chromeDataDir)) {
 app.commandLine.appendSwitch('user-data-dir', chromeDataDir);
 app.commandLine.appendSwitch('no-sandbox');
 app.commandLine.appendSwitch('disable-gpu');
+app.commandLine.appendSwitch('disable-web-security');
+app.commandLine.appendSwitch('disable-features', 'VizDisplayCompositor');
+app.commandLine.appendSwitch('enable-blink-features', 'ClipboardAPI');
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 
 console.log('Chrome data directory:', chromeDataDir);
 
@@ -54,9 +60,10 @@ function createWindow() {
             nodeIntegration: true,
             contextIsolation: false,
             webviewTag: true,
-            webSecurity: true,
-            allowRunningInsecureContent: false,
-            devTools: true
+            webSecurity: false,
+            allowRunningInsecureContent: true,
+            devTools: true,
+            enableBlinkFeatures: 'ClipboardAPI'
         },
         titleBarStyle: 'hiddenInset', // macOS 风格的标题栏
         backgroundColor: '#1e1e1e',
@@ -75,6 +82,12 @@ function createWindow() {
         if (enableDebug) {
             mainWindow.webContents.send('enable-debug');
         }
+    });
+
+    // 处理上下文菜单事件
+    mainWindow.webContents.on('context-menu', (event, params) => {
+        console.log('Main window context menu:', params);
+        // 允许显示上下文菜单，不调用 event.preventDefault()
     });
     
     // 等待窗口加载完成后再显示，避免白屏
@@ -124,6 +137,14 @@ function createWindow() {
                         store.delete('lastFile');
                         mainWindow.webContents.send('file-closed');
                     }
+                },
+                { type: 'separator' },
+                {
+                    label: '退出',
+                    accelerator: 'CmdOrCtrl+Q',
+                    click: () => {
+                        app.quit();
+                    }
                 }
             ]
         }
@@ -142,7 +163,17 @@ app.whenReady().then(async () => {
 
     // 设置会话持久化
     await persistentSession.setPermissionRequestHandler((webContents, permission, callback) => {
-        const allowedPermissions = ['media', 'geolocation', 'notifications'];
+        const allowedPermissions = [
+            'media', 
+            'geolocation', 
+            'notifications', 
+            'clipboard-read', 
+            'clipboard-write',
+            'clipboard-sanitized-write',
+            'clipboard',
+            'camera',
+            'microphone'
+        ];
         if (allowedPermissions.includes(permission)) {
             callback(true);
         } else {
@@ -152,6 +183,12 @@ app.whenReady().then(async () => {
 
     // 设置会话数据持久化
     await persistentSession.setPreloads([path.join(__dirname, 'preload.js')]);
+    
+    // 启用上下文菜单
+    persistentSession.on('context-menu', (event, params, webContents) => {
+        console.log('Context menu requested:', params);
+        // 不阻止上下文菜单显示
+    });
     
     createWindow();
 
@@ -246,4 +283,120 @@ ipcMain.handle('save-book-settings', async (event, fileMD5, settings) => {
         console.error('Error saving book settings:', error);
         return false;
     }
+});
+
+// Handle focus window request
+ipcMain.on('focus-window', () => {
+    if (mainWindow) {
+        if (mainWindow.isMinimized()) {
+            mainWindow.restore();
+        }
+        mainWindow.focus();
+        mainWindow.show();
+    }
+});
+
+// Handle context menu request
+ipcMain.on('show-context-menu', (event, params) => {
+    console.log('Creating context menu with params:', params);
+    
+    const template = [];
+    
+    // 添加复制选项
+    if (params.canCopy && params.selectionText) {
+        template.push({
+            label: `复制 "${params.selectionText.substring(0, 20)}${params.selectionText.length > 20 ? '...' : ''}"`,
+            click: () => {
+                event.sender.send('context-menu-command', 'copy');
+            }
+        });
+    }
+    
+    // 添加粘贴选项
+    if (params.canPaste && params.isEditable) {
+        template.push({
+            label: '粘贴',
+            click: () => {
+                event.sender.send('context-menu-command', 'paste');
+            }
+        });
+    }
+    
+    // 添加剪切选项
+    if (params.canCut && params.selectionText && params.isEditable) {
+        template.push({
+            label: '剪切',
+            click: () => {
+                event.sender.send('context-menu-command', 'cut');
+            }
+        });
+    }
+    
+    // 添加分隔符
+    if (template.length > 0) {
+        template.push({ type: 'separator' });
+    }
+    
+    // 添加全选选项
+    template.push({
+        label: '全选',
+        click: () => {
+            event.sender.send('context-menu-command', 'selectAll');
+        }
+    });
+    
+    // 添加撤销/重做选项
+    if (params.canUndo) {
+        template.push({
+            label: '撤销',
+            click: () => {
+                event.sender.send('context-menu-command', 'undo');
+            }
+        });
+    }
+    
+    if (params.canRedo) {
+        template.push({
+            label: '重做',
+            click: () => {
+                event.sender.send('context-menu-command', 'redo');
+            }
+        });
+    }
+    
+    // 添加分隔符和调试选项
+    template.push(
+        { type: 'separator' },
+        {
+            label: '检查剪贴板',
+            click: async () => {
+                try {
+                    const { clipboard } = require('electron');
+                    const text = clipboard.readText();
+                    const image = clipboard.readImage();
+                    console.log('剪贴板文本:', text ? `"${text.substring(0, 50)}..."` : '无');
+                    console.log('剪贴板图片:', image.isEmpty() ? '无' : `${image.getSize().width}x${image.getSize().height}`);
+                    
+                    // 显示通知
+                    const { Notification } = require('electron');
+                    new Notification({
+                        title: '剪贴板内容',
+                        body: `文本: ${text ? '有' : '无'}, 图片: ${image.isEmpty() ? '无' : '有'}`
+                    }).show();
+                } catch (error) {
+                    console.error('检查剪贴板失败:', error);
+                }
+            }
+        }
+    );
+    
+    // 创建并显示菜单
+    const menu = Menu.buildFromTemplate(template);
+    menu.popup({
+        window: mainWindow,
+        x: params.x,
+        y: params.y
+    });
+    
+    console.log('Context menu displayed');
 });

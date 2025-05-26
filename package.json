@@ -2,6 +2,7 @@
   "name": "ai-book-reader",
   "version": "1.0.0",
   "description": "AI Enhanced Book Reader",
+  "productName": "AI Book Reader",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
