@@ -30,6 +30,8 @@ const logger = {
 const leftWebview = document.getElementById('leftWebview');
 const rightWebview = document.getElementById('rightWebview');
 const smartButton = document.getElementById('smartButton');
+const bookTitleDisplay = document.getElementById('bookTitleDisplay');
+const bookAuthorDisplay = document.getElementById('bookAuthorDisplay');
 
 // 设置 webview 的基本属性
 [leftWebview, rightWebview].forEach(webview => {
@@ -145,13 +147,16 @@ ipcRenderer.on('file-opened', async (event, filePath) => {
         currentFilePath = filePath;
         currentFileMD5 = await generateFileMD5(filePath);
         logger.log('Settings', '文件已打开，MD5:', currentFileMD5);
+        
+        // Update book info display
+        await updateBookInfoDisplay();
     } else {
         logger.warn('File Opened', '文件不存在:', filePath);
     }
 });
 
 // 监听关闭文件事件
-ipcRenderer.on('file-closed', () => {
+ipcRenderer.on('file-closed', async () => {
     logger.log('File Closed', '收到文件关闭请求');
     
     // 清空左侧 webview
@@ -162,6 +167,9 @@ ipcRenderer.on('file-closed', () => {
     currentFilePath = null;
     currentFileMD5 = null;
     logger.log('File Closed', '已清除当前文件信息');
+    
+    // Update book info display
+    await updateBookInfoDisplay();
     
     // 显示关闭通知
     const notification = new Notification('文件已关闭', {
@@ -324,6 +332,47 @@ async function generateFileMD5(filePath) {
 let currentFilePath = null;
 let currentFileMD5 = null;
 
+// Update book info display in titlebar
+async function updateBookInfoDisplay() {
+    try {
+        if (!currentFilePath) {
+            // 没有文件时显示默认信息
+            bookTitleDisplay.textContent = 'AI Book Reader';
+            bookAuthorDisplay.textContent = '';
+            return;
+        }
+
+        // 尝试从书籍设置中获取信息
+        let bookTitle = '';
+        let bookAuthor = '';
+        
+        if (currentFileMD5) {
+            const bookSettings = await ipcRenderer.invoke('load-book-settings', currentFileMD5);
+            if (bookSettings) {
+                bookTitle = bookSettings.title || '';
+                bookAuthor = bookSettings.author || '';
+            }
+        }
+
+        // 如果没有设置的书名，使用文件名的前20个字符
+        if (!bookTitle) {
+            const fileName = path.basename(currentFilePath, path.extname(currentFilePath));
+            bookTitle = fileName.length > 20 ? fileName.substring(0, 20) + '...' : fileName;
+        }
+
+        // 更新显示
+        bookTitleDisplay.textContent = bookTitle;
+        bookAuthorDisplay.textContent = bookAuthor;
+        
+        logger.log('Book Info', '更新书籍信息显示:', { title: bookTitle, author: bookAuthor });
+    } catch (error) {
+        logger.error('Book Info', '更新书籍信息显示失败:', error);
+        // 出错时显示默认信息
+        bookTitleDisplay.textContent = 'AI Book Reader';
+        bookAuthorDisplay.textContent = '';
+    }
+}
+
 // Settings functionality
 const settingsModal = document.getElementById('settingsModal');
 const settingsButton = document.getElementById('settingsButton');
@@ -440,6 +489,10 @@ saveSettings.addEventListener('click', async () => {
     const success = await saveSettingsToFiles();
     if (success) {
         closeSettingsModal();
+        
+        // Update book info display after saving settings
+        await updateBookInfoDisplay();
+        
         // Show success notification
         const notification = new Notification('设置保存成功', {
             body: '您的设置已保存',
