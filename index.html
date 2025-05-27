@@ -95,6 +95,33 @@
             height: 16px;
         }
 
+        .page-input {
+            -webkit-app-region: no-drag;
+            background-color: #2d2d2d;
+            color: #e0e0e0;
+            border: 1px solid #3d3d3d;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 12px;
+            width: 55px;
+            text-align: center;
+            margin-right: 6px;
+            height: 20px;
+            box-sizing: border-box;
+        }
+
+        .page-input:focus {
+            outline: none;
+            border-color: #4CAF50;
+        }
+
+        .page-input:disabled {
+            background-color: #1a1a1a;
+            color: #666;
+            border-color: #2a2a2a;
+            cursor: not-allowed;
+        }
+
         .main-content {
             flex: 1;
             display: flex;
@@ -347,6 +374,17 @@
             <div class="book-author" id="bookAuthorDisplay"></div>
         </div>
         <div class="titlebar-buttons">
+            <input type="number" id="pageInput" class="page-input" title="当前页码，按回车跳转" min="1" placeholder="1">
+            <button class="smart-button" id="prevPageButton" title="上一页">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M15 18l-6-6 6-6"/>
+                </svg>
+            </button>
+            <button class="smart-button" id="nextPageButton" title="下一页">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 18l6-6-6-6"/>
+                </svg>
+            </button>
             <button class="smart-button" id="smartButton">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>

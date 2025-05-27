@@ -23,9 +23,7 @@ if (!fs.existsSync(chromeDataDir)) {
 
 // 设置 Chrome 数据目录
 app.commandLine.appendSwitch('user-data-dir', chromeDataDir);
-app.commandLine.appendSwitch('no-sandbox');
 app.commandLine.appendSwitch('disable-gpu');
-app.commandLine.appendSwitch('disable-web-security');
 app.commandLine.appendSwitch('disable-features', 'VizDisplayCompositor');
 app.commandLine.appendSwitch('enable-blink-features', 'ClipboardAPI');
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
@@ -60,8 +58,8 @@ function createWindow() {
             nodeIntegration: true,
             contextIsolation: false,
             webviewTag: true,
-            webSecurity: false,
-            allowRunningInsecureContent: true,
+            webSecurity: true,
+            allowRunningInsecureContent: false,
             devTools: true,
             enableBlinkFeatures: 'ClipboardAPI'
         },
@@ -252,6 +250,7 @@ function createWindow() {
                         mainWindow.webContents.send('webview-command', 'zoomOut');
                     }
                 },
+
                 { type: 'separator' },
                 {
                     label: '切换开发者工具',
@@ -355,6 +354,8 @@ app.on('will-quit', (event) => {
 // Settings IPC handlers
 const booksJsonPath = path.join(dataDir, 'books.json');
 const globalJsonPath = path.join(dataDir, 'global.json');
+const pageStatesJsonPath = path.join(dataDir, 'page-states.json');
+const rightWebviewUrlPath = path.join(dataDir, 'right-webview-url.json');
 
 // Load global settings
 ipcMain.handle('load-global-settings', async () => {
@@ -410,6 +411,109 @@ ipcMain.handle('save-book-settings', async (event, fileMD5, settings) => {
         return true;
     } catch (error) {
         console.error('Error saving book settings:', error);
+        return false;
+    }
+});
+
+// Load page state
+ipcMain.handle('load-page-state', async (event, fileMD5) => {
+    try {
+        if (fs.existsSync(pageStatesJsonPath)) {
+            const data = fs.readFileSync(pageStatesJsonPath, 'utf8');
+            const pageStates = JSON.parse(data);
+            return pageStates[fileMD5] || null;
+        }
+        return null;
+    } catch (error) {
+        console.error('Error loading page state:', error);
+        return null;
+    }
+});
+
+// Save page state
+ipcMain.handle('save-page-state', async (event, fileMD5, pageState) => {
+    try {
+        let pageStates = {};
+        if (fs.existsSync(pageStatesJsonPath)) {
+            const data = fs.readFileSync(pageStatesJsonPath, 'utf8');
+            pageStates = JSON.parse(data);
+        }
+        
+        pageStates[fileMD5] = pageState;
+        fs.writeFileSync(pageStatesJsonPath, JSON.stringify(pageStates, null, 2), 'utf8');
+        return true;
+    } catch (error) {
+        console.error('Error saving page state:', error);
+        return false;
+    }
+});
+
+// Load right webview URL
+ipcMain.handle('load-right-webview-url', async () => {
+    try {
+        if (fs.existsSync(rightWebviewUrlPath)) {
+            const data = fs.readFileSync(rightWebviewUrlPath, 'utf8');
+            const urlData = JSON.parse(data);
+            return urlData.url || 'https://chat.openai.com/';
+        }
+        return 'https://chat.openai.com/';
+    } catch (error) {
+        console.error('Error loading right webview URL:', error);
+        return 'https://chat.openai.com/';
+    }
+});
+
+// Save right webview URL
+ipcMain.handle('save-right-webview-url', async (event, url) => {
+    try {
+        const urlData = {
+            url: url,
+            lastSaved: new Date().toISOString()
+        };
+        fs.writeFileSync(rightWebviewUrlPath, JSON.stringify(urlData, null, 2), 'utf8');
+        return true;
+    } catch (error) {
+        console.error('Error saving right webview URL:', error);
+        return false;
+    }
+});
+
+// File-specific right webview URLs path
+const fileWebviewUrlsPath = path.join(dataDir, 'file-webview-urls.json');
+
+// Load right webview URL for specific file
+ipcMain.handle('load-right-webview-url-for-file', async (event, fileMD5) => {
+    try {
+        if (fs.existsSync(fileWebviewUrlsPath)) {
+            const data = fs.readFileSync(fileWebviewUrlsPath, 'utf8');
+            const fileUrls = JSON.parse(data);
+            return fileUrls[fileMD5]?.url || null;
+        }
+        return null;
+    } catch (error) {
+        console.error('Error loading file-specific right webview URL:', error);
+        return null;
+    }
+});
+
+// Save right webview URL for specific file
+ipcMain.handle('save-right-webview-url-for-file', async (event, fileMD5, url) => {
+    try {
+        let fileUrls = {};
+        if (fs.existsSync(fileWebviewUrlsPath)) {
+            const data = fs.readFileSync(fileWebviewUrlsPath, 'utf8');
+            fileUrls = JSON.parse(data);
+        }
+        
+        fileUrls[fileMD5] = {
+            url: url,
+            lastSaved: new Date().toISOString()
+        };
+        
+        fs.writeFileSync(fileWebviewUrlsPath, JSON.stringify(fileUrls, null, 2), 'utf8');
+        return true;
+    } catch (error) {
+        console.error('Error saving file-specific right webview URL:', error);
         return false;
     }
 });

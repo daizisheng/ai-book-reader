@@ -30,13 +30,23 @@ const logger = {
 const leftWebview = document.getElementById('leftWebview');
 const rightWebview = document.getElementById('rightWebview');
 const smartButton = document.getElementById('smartButton');
+const pageInput = document.getElementById('pageInput');
+const prevPageButton = document.getElementById('prevPageButton');
+const nextPageButton = document.getElementById('nextPageButton');
 const bookTitleDisplay = document.getElementById('bookTitleDisplay');
 const bookAuthorDisplay = document.getElementById('bookAuthorDisplay');
 
 // 设置 webview 的基本属性
 [leftWebview, rightWebview].forEach(webview => {
     webview.setAttribute('allowpopups', 'true');
-    webview.setAttribute('webpreferences', 'contextIsolation=no,nodeIntegration=no,enableRemoteModule=no,sandbox=no,webSecurity=no,allowRunningInsecureContent=true');
+    // 为左侧PDF webview和右侧ChatGPT webview设置不同的安全策略
+    if (webview.id === 'leftWebview') {
+        // 左侧PDF webview需要访问本地文件，但尽可能保持安全
+        webview.setAttribute('webpreferences', 'contextIsolation=yes,nodeIntegration=no,enableRemoteModule=no,sandbox=no,webSecurity=no,allowRunningInsecureContent=no,experimentalFeatures=no');
+    } else {
+        // 右侧ChatGPT webview使用更安全的设置
+        webview.setAttribute('webpreferences', 'contextIsolation=yes,nodeIntegration=no,enableRemoteModule=no,sandbox=yes,webSecurity=yes,allowRunningInsecureContent=no,experimentalFeatures=no');
+    }
     webview.setAttribute('preload', path.join(__dirname, 'preload.js'));
     // 设置两个 webview 共享同一个持久化会话
     webview.setAttribute('partition', 'persist:shared');
@@ -147,6 +157,35 @@ const bookAuthorDisplay = document.getElementById('bookAuthorDisplay');
     });
 });
 
+// 为左侧webview添加PDF特定的事件监听器
+leftWebview.addEventListener('did-finish-load', () => {
+    logger.log('Left Webview', 'PDF页面加载完成');
+    // 延迟获取PDF信息，确保PDF.js完全初始化
+    setTimeout(() => {
+        getPDFInfo();
+    }, 100);
+});
+
+leftWebview.addEventListener('did-navigate', (event) => {
+    logger.log('Left Webview', 'PDF导航完成:', event.url);
+    // 当URL变化时，尝试从URL中解析页面信息
+    if (event.url.includes('#page=')) {
+        const hash = event.url.split('#')[1];
+        const pageMatch = hash.match(/page=(\d+)/);
+        
+        if (pageMatch) {
+            currentPDFPage = parseInt(pageMatch[1]);
+            logger.log('PDF Navigation', `从URL解析到页面: ${currentPDFPage}`);
+            
+            // 更新页码输入框
+            pageInput.value = currentPDFPage;
+            
+            // 保存当前页面状态
+            saveCurrentPageState();
+        }
+    }
+});
+
 // 标记是否已加载过 ChatGPT
 let chatgptLoaded = false;
 let enableDebug = false;
@@ -158,17 +197,18 @@ ipcRenderer.on('enable-debug', () => {
 });
 
 // 右侧 webview dom-ready 后加载 ChatGPT（仅第一次）
-rightWebview.addEventListener('dom-ready', () => {
+rightWebview.addEventListener('dom-ready', async () => {
     logger.log('Right Webview', 'DOM 准备就绪');
     logger.log('Right Webview', '分区信息:', rightWebview.getAttribute('partition'));
     
     if (!chatgptLoaded) {
-        logger.log('Right Webview', '首次加载，准备打开 ChatGPT...');
-        rightWebview.loadURL('https://chat.openai.com/');
+        logger.log('Right Webview', '首次加载，准备打开保存的URL...');
+        const savedUrl = await loadRightWebviewURL();
+        rightWebview.loadURL(savedUrl);
         chatgptLoaded = true;
-        logger.log('Right Webview', 'ChatGPT 加载请求已发送');
+        logger.log('Right Webview', '加载请求已发送，URL:', savedUrl);
     } else {
-        logger.log('Right Webview', 'ChatGPT 已经加载过，跳过加载');
+        logger.log('Right Webview', '已经加载过，跳过加载');
     }
     // 只有启用 debug 时才打开 webview 的开发者工具
     if (enableDebug && rightWebview.isDevToolsOpened && !rightWebview.isDevToolsOpened()) {
@@ -388,6 +428,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
     
+
+    
     rightWebview.addEventListener('did-fail-load', (event) => {
         logger.error('Right Webview', '加载失败:', {
             errorCode: event.errorCode,
@@ -407,6 +449,24 @@ document.addEventListener('DOMContentLoaded', async () => {
             isInPlace: event.isInPlace,
             isMainFrame: event.isMainFrame
         });
+        
+        // 保存右侧webview的URL（与当前PDF文件捆绑）
+        if (event.isMainFrame && event.url !== 'about:blank') {
+            saveRightWebviewURLForCurrentFile();
+        }
+    });
+
+    // 监听页面内导航（如单页应用的路由变化）
+    rightWebview.addEventListener('did-navigate-in-page', (event) => {
+        logger.log('Right Webview', '页面内导航:', {
+            url: event.url,
+            isMainFrame: event.isMainFrame
+        });
+        
+        // 保存右侧webview的URL（与当前PDF文件捆绑）
+        if (event.isMainFrame && event.url !== 'about:blank') {
+            saveRightWebviewURLForCurrentFile();
+        }
     });
 
     // 拦截新窗口，外部链接用系统浏览器打开
@@ -627,17 +687,42 @@ ipcRenderer.on('file-opened', async (event, filePath) => {
     // 检查文件是否存在
     if (fs.existsSync(filePath)) {
         logger.log('File Opened', '文件存在，准备加载');
-        // 将文件路径转换为 file:// URL
-        const fileUrl = `file://${filePath}`;
-        logger.log('File Opened', '转换后的 URL:', fileUrl);
-        // 在左侧 webview 中加载 PDF
-        leftWebview.loadURL(fileUrl);
-        logger.log('File Opened', '已发送加载请求到左侧面板');
         
         // Update current file info for settings
         currentFilePath = filePath;
         currentFileMD5 = await generateFileMD5(filePath);
         logger.log('Settings', '文件已打开，MD5:', currentFileMD5);
+        
+        // 尝试加载保存的页面状态
+        const savedPageState = await loadPageState();
+        if (savedPageState) {
+            currentPDFPage = savedPageState.currentPage || 1;
+            logger.log('File Opened', '恢复保存的页面状态:', savedPageState);
+        } else {
+            // 重置PDF状态
+            currentPDFPage = 1;
+            logger.log('File Opened', '使用默认页面状态');
+        }
+        
+        // 使用PDF URL参数构建URL
+        const fileUrl = buildPDFUrl(filePath, currentPDFPage);
+        logger.log('File Opened', '转换后的 URL:', fileUrl);
+        
+        // 在左侧 webview 中加载 PDF
+        leftWebview.loadURL(fileUrl);
+        logger.log('File Opened', '已发送加载请求到左侧面板');
+        
+        // 加载该文件对应的右侧webview URL
+        const rightUrl = await loadRightWebviewURLForCurrentFile();
+        if (rightUrl && rightWebview.getURL() !== rightUrl) {
+            logger.log('File Opened', '加载文件对应的右侧URL:', rightUrl);
+            rightWebview.loadURL(rightUrl);
+        }
+        
+        // 延迟获取PDF信息
+        setTimeout(() => {
+            getPDFInfo();
+        }, 100);
         
         // Update book info display
         await updateBookInfoDisplay();
@@ -645,6 +730,8 @@ ipcRenderer.on('file-opened', async (event, filePath) => {
         logger.warn('File Opened', '文件不存在:', filePath);
     }
 });
+
+
 
 // 监听关闭文件事件
 ipcRenderer.on('file-closed', async () => {
@@ -667,6 +754,49 @@ ipcRenderer.on('file-closed', async () => {
         body: '当前PDF文件已关闭',
         silent: true
     });
+});
+
+// 添加页码输入框功能
+pageInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+        const targetPage = parseInt(pageInput.value);
+        if (targetPage && targetPage > 0) {
+            logger.log('Page Input', `用户输入跳转到第${targetPage}页`);
+            navigateToPage(targetPage);
+        } else {
+            logger.warn('Page Input', '无效的页码:', pageInput.value);
+            // 恢复当前页码
+            pageInput.value = currentPDFPage;
+        }
+    }
+});
+
+pageInput.addEventListener('blur', () => {
+    // 失去焦点时验证并恢复页码
+    const targetPage = parseInt(pageInput.value);
+    if (!targetPage || targetPage < 1) {
+        logger.log('Page Input', '输入框失去焦点，恢复当前页码');
+        pageInput.value = currentPDFPage;
+    }
+});
+
+// 添加翻页按钮功能
+prevPageButton.addEventListener('click', () => {
+    logger.log('Prev Page Button', '用户点击了上一页按钮');
+    if (prevPageButton.disabled) {
+        logger.log('Prev Page Button', '上一页按钮被禁用，忽略点击');
+        return;
+    }
+    previousPage();
+});
+
+nextPageButton.addEventListener('click', () => {
+    logger.log('Next Page Button', '用户点击了下一页按钮');
+    if (nextPageButton.disabled) {
+        logger.log('Next Page Button', '下一页按钮被禁用，忽略点击');
+        return;
+    }
+    nextPage();
 });
 
 // 添加截图功能
@@ -939,24 +1069,55 @@ function updateButtonStates() {
     // 更新按钮状态
     smartButton.disabled = !hasFile;
     settingsButton.disabled = !hasFile;
+    pageInput.disabled = !hasFile;
+    prevPageButton.disabled = !hasFile;
+    nextPageButton.disabled = !hasFile;
     
     // 更新按钮样式
     if (hasFile) {
         smartButton.style.opacity = '1';
         settingsButton.style.opacity = '1';
+        pageInput.style.opacity = '1';
+        prevPageButton.style.opacity = '1';
+        nextPageButton.style.opacity = '1';
         smartButton.style.cursor = 'pointer';
         settingsButton.style.cursor = 'pointer';
+        pageInput.style.cursor = 'text';
+        prevPageButton.style.cursor = 'pointer';
+        nextPageButton.style.cursor = 'pointer';
     } else {
         smartButton.style.opacity = '0.5';
         settingsButton.style.opacity = '0.5';
+        pageInput.style.opacity = '0.5';
+        prevPageButton.style.opacity = '0.5';
+        nextPageButton.style.opacity = '0.5';
         smartButton.style.cursor = 'not-allowed';
         settingsButton.style.cursor = 'not-allowed';
+        pageInput.style.cursor = 'not-allowed';
+        prevPageButton.style.cursor = 'not-allowed';
+        nextPageButton.style.cursor = 'not-allowed';
+    }
+    
+    // 更新页码输入框的值
+    if (hasFile) {
+        pageInput.value = currentPDFPage;
+    } else {
+        pageInput.value = '';
+        pageInput.placeholder = '1';
     }
     
     // 更新设置界面中的文件相关字段状态
     updateBookSettingsState(hasFile);
     
-    logger.log('Button States', '按钮状态已更新:', { hasFile, smartDisabled: !hasFile, settingsDisabled: !hasFile });
+    logger.log('Button States', '按钮状态已更新:', { 
+        hasFile, 
+        smartDisabled: !hasFile, 
+        settingsDisabled: !hasFile,
+        pageInputDisabled: !hasFile,
+        prevPageDisabled: !hasFile,
+        nextPageDisabled: !hasFile,
+        currentPage: currentPDFPage
+    });
 }
 
 // Update book settings section state
@@ -1174,3 +1335,165 @@ saveSettings.addEventListener('click', async () => {
         });
     }
 });
+
+// PDF控制相关变量
+let currentPDFPage = 1;
+
+// PDF URL参数控制函数
+function buildPDFUrl(filePath, page = null) {
+    const baseUrl = `file://${filePath}`;
+    
+    if (page !== null && page > 0) {
+        return `${baseUrl}?_=${page}#page=${page}&view=FitV`;
+    }
+    
+    return baseUrl;
+}
+
+// 导航到指定页面
+function navigateToPage(pageNumber) {
+    if (!currentFilePath) {
+        logger.warn('PDF Navigation', '没有打开的PDF文件');
+        return;
+    }
+    
+    if (pageNumber < 1) {
+        pageNumber = 1;
+    }
+    
+    currentPDFPage = pageNumber;
+    const pdfUrl = buildPDFUrl(currentFilePath, currentPDFPage);
+    logger.log('PDF Navigation', `导航到第${pageNumber}页，URL:`, pdfUrl);
+    
+    // 更新页码输入框
+    pageInput.value = currentPDFPage;
+    
+    // 直接加载新的URL，让PDF.js处理页面跳转
+    leftWebview.loadURL(pdfUrl);
+    
+    // 保存当前页面状态
+    saveCurrentPageState();
+}
+
+// 下一页
+function nextPage() {
+    navigateToPage(currentPDFPage + 1);
+}
+
+// 上一页
+function previousPage() {
+    if (currentPDFPage > 1) {
+        navigateToPage(currentPDFPage - 1);
+    }
+}
+// 获取PDF信息的函数
+function getPDFInfo() {
+    if (!leftWebview) return;
+    
+    const url = leftWebview.getURL();
+    const hash = url.split('#')[1] || '';
+    const pageMatch = hash.match(/page=(\d+)/);
+    
+    logger.log('PDF Info', '左侧webview内部URL:', url);
+    logger.log('PDF Info', 'Hash部分:', hash);
+    
+    currentPDFPage = pageMatch ? parseInt(pageMatch[1]) : 1;
+    logger.log('PDF Info', `从URL获取当前页: ${currentPDFPage}`);
+    
+    // 更新页码输入框
+    pageInput.value = currentPDFPage;
+    
+    // 保存当前页面状态
+    saveCurrentPageState();
+}
+
+// 保存当前页面状态
+async function saveCurrentPageState() {
+    if (!currentFilePath || !currentFileMD5) return;
+    
+    try {
+        const pageState = {
+            currentPage: currentPDFPage,
+            lastAccessed: new Date().toISOString()
+        };
+        
+        await ipcRenderer.invoke('save-page-state', currentFileMD5, pageState);
+        logger.log('Page State', '页面状态已保存:', pageState);
+    } catch (error) {
+        logger.error('Page State', '保存页面状态失败:', error);
+    }
+}
+
+// 加载页面状态
+async function loadPageState() {
+    if (!currentFilePath || !currentFileMD5) return null;
+    
+    try {
+        const pageState = await ipcRenderer.invoke('load-page-state', currentFileMD5);
+        if (pageState) {
+            logger.log('Page State', '加载页面状态:', pageState);
+            return pageState;
+        }
+    } catch (error) {
+        logger.error('Page State', '加载页面状态失败:', error);
+    }
+    
+    return null;
+}
+
+// 保存右侧webview的URL（与当前PDF文件捆绑）
+async function saveRightWebviewURLForCurrentFile() {
+    try {
+        const currentUrl = rightWebview.getURL();
+        if (currentUrl && currentUrl !== 'about:blank') {
+            if (currentFileMD5) {
+                // 如果有当前文件，保存到该文件的专用记录中
+                await ipcRenderer.invoke('save-right-webview-url-for-file', currentFileMD5, currentUrl);
+                logger.log('Right Webview URL', `已为文件 ${currentFileMD5} 保存URL:`, currentUrl);
+            } else {
+                // 如果没有当前文件，保存到全局记录中
+                await ipcRenderer.invoke('save-right-webview-url', currentUrl);
+                logger.log('Right Webview URL', '已保存全局URL:', currentUrl);
+            }
+        }
+    } catch (error) {
+        logger.error('Right Webview URL', '保存URL失败:', error);
+    }
+}
+
+// 加载右侧webview的URL（优先加载当前文件对应的URL）
+async function loadRightWebviewURLForCurrentFile() {
+    try {
+        let savedUrl = null;
+        
+        if (currentFileMD5) {
+            // 如果有当前文件，优先加载该文件对应的URL
+            savedUrl = await ipcRenderer.invoke('load-right-webview-url-for-file', currentFileMD5);
+            if (savedUrl && savedUrl !== 'about:blank') {
+                logger.log('Right Webview URL', `加载文件 ${currentFileMD5} 对应的URL:`, savedUrl);
+                return savedUrl;
+            }
+        }
+        
+        // 如果没有文件专用URL，加载全局URL
+        savedUrl = await ipcRenderer.invoke('load-right-webview-url');
+        if (savedUrl && savedUrl !== 'about:blank') {
+            logger.log('Right Webview URL', '加载全局URL:', savedUrl);
+            return savedUrl;
+        }
+    } catch (error) {
+        logger.error('Right Webview URL', '加载URL失败:', error);
+    }
+    
+    return 'https://chat.openai.com/';
+}
+
+// 兼容性函数：保持原有的全局URL保存功能
+async function saveRightWebviewURL() {
+    return saveRightWebviewURLForCurrentFile();
+}
+
+// 兼容性函数：保持原有的全局URL加载功能
+async function loadRightWebviewURL() {
+    return loadRightWebviewURLForCurrentFile();
+}

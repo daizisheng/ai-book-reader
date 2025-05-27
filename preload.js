@@ -1,5 +1,5 @@
 // 在 webview 中注入的预加载脚本
-const { ipcRenderer } = require('electron');
+const { ipcRenderer, contextBridge } = require('electron');
 
 console.log('Preload script running in webview');
 
@@ -13,12 +13,27 @@ window.addEventListener('error', (event) => {
     console.error('Error in webview:', event.error);
 });
 
-// 提供一个全局函数来发送 IPC 消息
-window.sendToMain = (channel, ...args) => {
-    try {
-        ipcRenderer.sendToHost(channel, ...args);
-        console.log('IPC message sent:', channel, args);
-    } catch (error) {
-        console.error('Failed to send IPC message:', error);
-    }
-}; 
+// 使用 contextBridge 安全地暴露 API
+try {
+    contextBridge.exposeInMainWorld('electronAPI', {
+        sendToMain: (channel, ...args) => {
+            try {
+                ipcRenderer.sendToHost(channel, ...args);
+                console.log('IPC message sent:', channel, args);
+            } catch (error) {
+                console.error('Failed to send IPC message:', error);
+            }
+        }
+    });
+} catch (error) {
+    // 如果 contextBridge 不可用（比如在某些webview中），回退到旧方法
+    console.warn('contextBridge not available, using fallback method');
+    window.sendToMain = (channel, ...args) => {
+        try {
+            ipcRenderer.sendToHost(channel, ...args);
+            console.log('IPC message sent:', channel, args);
+        } catch (error) {
+            console.error('Failed to send IPC message:', error);
+        }
+    };
+} 
