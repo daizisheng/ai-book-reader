@@ -35,6 +35,7 @@ const prevPageButton = document.getElementById('prevPageButton');
 const nextPageButton = document.getElementById('nextPageButton');
 const bookTitleDisplay = document.getElementById('bookTitleDisplay');
 const bookAuthorDisplay = document.getElementById('bookAuthorDisplay');
+const pdfLoadingMask = document.getElementById('pdfLoadingMask');
 
 // 设置 webview 的基本属性
 [leftWebview, rightWebview].forEach(webview => {
@@ -757,12 +758,12 @@ ipcRenderer.on('file-closed', async () => {
 });
 
 // 添加页码输入框功能
-pageInput.addEventListener('keydown', (event) => {
+pageInput.addEventListener('keydown', async (event) => {
     if (event.key === 'Enter') {
         const targetPage = parseInt(pageInput.value);
         if (targetPage && targetPage > 0) {
             logger.log('Page Input', `用户输入跳转到第${targetPage}页`);
-            navigateToPage(targetPage);
+            await navigateToPage(targetPage);
         } else {
             logger.warn('Page Input', '无效的页码:', pageInput.value);
             // 恢复当前页码
@@ -781,22 +782,22 @@ pageInput.addEventListener('blur', () => {
 });
 
 // 添加翻页按钮功能
-prevPageButton.addEventListener('click', () => {
+prevPageButton.addEventListener('click', async () => {
     logger.log('Prev Page Button', '用户点击了上一页按钮');
     if (prevPageButton.disabled) {
         logger.log('Prev Page Button', '上一页按钮被禁用，忽略点击');
         return;
     }
-    previousPage();
+    await previousPage();
 });
 
-nextPageButton.addEventListener('click', () => {
+nextPageButton.addEventListener('click', async () => {
     logger.log('Next Page Button', '用户点击了下一页按钮');
     if (nextPageButton.disabled) {
         logger.log('Next Page Button', '下一页按钮被禁用，忽略点击');
         return;
     }
-    nextPage();
+    await nextPage();
 });
 
 // 添加截图功能
@@ -1339,6 +1340,47 @@ saveSettings.addEventListener('click', async () => {
 // PDF控制相关变量
 let currentPDFPage = 1;
 
+// PDF加载遮罩相关函数
+async function captureAndShowMask() {
+    if (!leftWebview || !pdfLoadingMask) return;
+    
+    try {
+        logger.log('PDF Mask', '开始截取PDF页面...');
+        
+        // 截取当前PDF页面
+        const screenshot = await leftWebview.capturePage();
+        const dataUrl = screenshot.toDataURL();
+        
+        // 设置遮罩背景图片
+        pdfLoadingMask.style.backgroundImage = `url(${dataUrl})`;
+        
+        // 显示遮罩
+        pdfLoadingMask.classList.add('active');
+        
+        logger.log('PDF Mask', '遮罩已显示');
+        return true;
+    } catch (error) {
+        logger.error('PDF Mask', '截图失败:', error);
+        return false;
+    }
+}
+
+function hideMask() {
+    if (!pdfLoadingMask) return;
+    
+    logger.log('PDF Mask', '开始隐藏遮罩...');
+    
+    // 添加淡出效果
+    pdfLoadingMask.classList.add('fade-out');
+    
+    // 500ms后完全隐藏遮罩
+    setTimeout(() => {
+        pdfLoadingMask.classList.remove('active', 'fade-out');
+        pdfLoadingMask.style.backgroundImage = '';
+        logger.log('PDF Mask', '遮罩已隐藏');
+    }, 300); // 与CSS transition时间一致
+}
+
 // PDF URL参数控制函数
 function buildPDFUrl(filePath, page = null) {
     const baseUrl = `file://${filePath}`;
@@ -1351,7 +1393,7 @@ function buildPDFUrl(filePath, page = null) {
 }
 
 // 导航到指定页面
-function navigateToPage(pageNumber) {
+async function navigateToPage(pageNumber) {
     if (!currentFilePath) {
         logger.warn('PDF Navigation', '没有打开的PDF文件');
         return;
@@ -1360,6 +1402,17 @@ function navigateToPage(pageNumber) {
     if (pageNumber < 1) {
         pageNumber = 1;
     }
+    
+    // 如果页面没有变化，不需要导航
+    if (pageNumber === currentPDFPage) {
+        logger.log('PDF Navigation', '页面没有变化，跳过导航');
+        return;
+    }
+    
+    logger.log('PDF Navigation', `准备导航到第${pageNumber}页`);
+    
+    // 先截图并显示遮罩
+    const maskShown = await captureAndShowMask();
     
     currentPDFPage = pageNumber;
     const pdfUrl = buildPDFUrl(currentFilePath, currentPDFPage);
@@ -1371,19 +1424,26 @@ function navigateToPage(pageNumber) {
     // 直接加载新的URL，让PDF.js处理页面跳转
     leftWebview.loadURL(pdfUrl);
     
+    // 如果显示了遮罩，在500ms后开始隐藏
+    if (maskShown) {
+        setTimeout(() => {
+            hideMask();
+        }, 500);
+    }
+    
     // 保存当前页面状态
     saveCurrentPageState();
 }
 
 // 下一页
-function nextPage() {
-    navigateToPage(currentPDFPage + 1);
+async function nextPage() {
+    await navigateToPage(currentPDFPage + 1);
 }
 
 // 上一页
-function previousPage() {
+async function previousPage() {
     if (currentPDFPage > 1) {
-        navigateToPage(currentPDFPage - 1);
+        await navigateToPage(currentPDFPage - 1);
     }
 }
 // 获取PDF信息的函数

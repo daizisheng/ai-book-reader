@@ -365,6 +365,32 @@
         .settings-section.disabled .form-label {
             color: #666;
         }
+
+        /* PDF Loading Mask Styles */
+        .pdf-loading-mask {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #1e1e1e;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            z-index: 1000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease-out;
+        }
+
+        .pdf-loading-mask.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .pdf-loading-mask.fade-out {
+            opacity: 0;
+        }
     </style>
 </head>
 <body>
@@ -406,8 +432,9 @@
         </div>
     </div>
     <div class="main-content">
-        <div class="left-panel">
+        <div class="left-panel" style="position: relative;">
             <webview id="leftWebview" src="about:blank"></webview>
+            <div id="pdfLoadingMask" class="pdf-loading-mask"></div>
         </div>
         <div class="right-panel">
             <webview id="rightWebview" src="about:blank"></webview>
