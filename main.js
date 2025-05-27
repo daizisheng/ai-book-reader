@@ -356,6 +356,7 @@ const booksJsonPath = path.join(dataDir, 'books.json');
 const globalJsonPath = path.join(dataDir, 'global.json');
 const pageStatesJsonPath = path.join(dataDir, 'page-states.json');
 const rightWebviewUrlPath = path.join(dataDir, 'right-webview-url.json');
+const layoutConfigPath = path.join(dataDir, 'layout-config.json');
 
 // Load global settings
 ipcMain.handle('load-global-settings', async () => {
@@ -514,6 +515,35 @@ ipcMain.handle('save-right-webview-url-for-file', async (event, fileMD5, url) =>
         return true;
     } catch (error) {
         console.error('Error saving file-specific right webview URL:', error);
+        return false;
+    }
+});
+
+// Load layout configuration
+ipcMain.handle('load-layout-config', async () => {
+    try {
+        if (fs.existsSync(layoutConfigPath)) {
+            const data = fs.readFileSync(layoutConfigPath, 'utf8');
+            return JSON.parse(data);
+        }
+        return null;
+    } catch (error) {
+        console.error('Error loading layout config:', error);
+        return null;
+    }
+});
+
+// Save layout configuration
+ipcMain.handle('save-layout-config', async (event, layoutConfig) => {
+    try {
+        const configData = {
+            ...layoutConfig,
+            lastSaved: new Date().toISOString()
+        };
+        fs.writeFileSync(layoutConfigPath, JSON.stringify(configData, null, 2), 'utf8');
+        return true;
+    } catch (error) {
+        console.error('Error saving layout config:', error);
         return false;
     }
 });

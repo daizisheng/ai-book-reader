@@ -122,6 +122,40 @@
             cursor: not-allowed;
         }
 
+        .layout-input {
+            -webkit-app-region: no-drag;
+            background-color: #2d2d2d;
+            color: #e0e0e0;
+            border: 1px solid #3d3d3d;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 12px;
+            width: 50px;
+            text-align: center;
+            margin-right: 2px;
+            height: 20px;
+            box-sizing: border-box;
+        }
+
+        .layout-input:focus {
+            outline: none;
+            border-color: #4CAF50;
+        }
+
+        .layout-input:disabled {
+            background-color: #1a1a1a;
+            color: #666;
+            border-color: #2a2a2a;
+            cursor: not-allowed;
+        }
+
+        .layout-label {
+            -webkit-app-region: no-drag;
+            color: #999;
+            font-size: 12px;
+            margin-right: 8px;
+        }
+
         .main-content {
             flex: 1;
             display: flex;
@@ -131,14 +165,19 @@
         }
 
         .left-panel, .right-panel {
-            flex: 1;
             height: 100%;
             border: none;
             background-color: #1e1e1e;
+            overflow: hidden;
         }
 
         .left-panel {
             border-right: 1px solid #3d3d3d;
+            width: 50%; /* 默认50% */
+        }
+
+        .right-panel {
+            flex: 1; /* 右侧占据剩余空间 */
         }
 
         webview {
@@ -400,6 +439,8 @@
             <div class="book-author" id="bookAuthorDisplay"></div>
         </div>
         <div class="titlebar-buttons">
+            <input type="number" id="layoutInput" class="layout-input" title="左侧面板宽度百分比" min="20" max="80" value="50" placeholder="50">
+            <span class="layout-label">%</span>
             <input type="number" id="pageInput" class="page-input" title="当前页码，按回车跳转" min="1" placeholder="1">
             <button class="smart-button" id="prevPageButton" title="上一页">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

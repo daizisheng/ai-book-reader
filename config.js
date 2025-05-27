@@ -9,6 +9,9 @@ const DEFAULT_CONFIG = {
     // 默认通知设置
     defaultNotificationEnabled: true,
     
+    // 默认布局设置
+    defaultLeftPanelWidth: 50, // 左侧面板宽度百分比
+    
     // 等待时间配置（毫秒）
     waitTimes: {
         imageUploadWait: 3000,     // 图片上传等待时间

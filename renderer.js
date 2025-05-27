@@ -36,6 +36,7 @@ const nextPageButton = document.getElementById('nextPageButton');
 const bookTitleDisplay = document.getElementById('bookTitleDisplay');
 const bookAuthorDisplay = document.getElementById('bookAuthorDisplay');
 const pdfLoadingMask = document.getElementById('pdfLoadingMask');
+const layoutInput = document.getElementById('layoutInput');
 
 // 设置 webview 的基本属性
 [leftWebview, rightWebview].forEach(webview => {
@@ -249,6 +250,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // 请求通知权限
     await requestNotificationPermission();
+    
+    // 初始化布局
+    await initializeLayout();
     
     // 初始化按钮状态
     updateButtonStates();
@@ -1073,6 +1077,8 @@ function updateButtonStates() {
     pageInput.disabled = !hasFile;
     prevPageButton.disabled = !hasFile;
     nextPageButton.disabled = !hasFile;
+    // 布局输入框始终可用
+    layoutInput.disabled = false;
     
     // 更新按钮样式
     if (hasFile) {
@@ -1097,6 +1103,9 @@ function updateButtonStates() {
         pageInput.style.cursor = 'not-allowed';
         prevPageButton.style.cursor = 'not-allowed';
         nextPageButton.style.cursor = 'not-allowed';
+        // 布局输入框始终可用
+        layoutInput.style.opacity = '1';
+        layoutInput.style.cursor = 'text';
     }
     
     // 更新页码输入框的值
@@ -1556,4 +1565,132 @@ async function saveRightWebviewURL() {
 // 兼容性函数：保持原有的全局URL加载功能
 async function loadRightWebviewURL() {
     return loadRightWebviewURLForCurrentFile();
+}
+
+// 布局管理功能
+async function initializeLayout() {
+    // 加载保存的布局配置
+    const savedLayout = await loadLayoutConfig();
+    const leftWidth = savedLayout || DEFAULT_CONFIG.defaultLeftPanelWidth;
+    
+    // 设置输入框的值
+    layoutInput.value = leftWidth;
+    
+    // 应用布局
+    applyLayout(leftWidth);
+    
+    // 添加输入框事件监听器
+    setupLayoutInputListeners();
+    
+    logger.log('Layout', `布局初始化完成，左侧宽度: ${leftWidth}%`);
+}
+
+function setupLayoutInputListeners() {
+    // 监听回车键
+    layoutInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+            applyLayoutFromInput();
+        }
+    });
+    
+    // 监听失去焦点
+    layoutInput.addEventListener('blur', () => {
+        applyLayoutFromInput();
+    });
+    
+    // 监听输入变化（实时预览）
+    layoutInput.addEventListener('input', () => {
+        const value = parseInt(layoutInput.value);
+        if (!isNaN(value) && value >= 20 && value <= 80) {
+            applyLayout(value);
+        }
+    });
+}
+
+function applyLayoutFromInput() {
+    let value = parseInt(layoutInput.value);
+    
+    // 验证输入值
+    if (isNaN(value)) {
+        // 如果输入无效，恢复之前的值
+        const currentWidth = getCurrentLeftPanelWidth();
+        layoutInput.value = currentWidth;
+        logger.warn('Layout', `无效的布局值: ${layoutInput.value}，已恢复为: ${currentWidth}%`);
+        return;
+    }
+    
+    // 范围限制：小于20当作20，大于80当作80
+    if (value < 20) {
+        value = 20;
+        logger.log('Layout', `输入值小于20，自动调整为20%`);
+    } else if (value > 80) {
+        value = 80;
+        logger.log('Layout', `输入值大于80，自动调整为80%`);
+    }
+    
+    // 更新输入框显示
+    layoutInput.value = value;
+    
+    // 应用新的布局
+    applyLayout(value);
+    
+    // 保存到配置
+    saveLayoutConfig(value);
+    
+    logger.log('Layout', `用户设置布局: ${value}%`);
+}
+
+function applyLayout(leftWidthPercent) {
+    const leftPanel = document.querySelector('.left-panel');
+    const rightPanel = document.querySelector('.right-panel');
+    
+    if (!leftPanel || !rightPanel) {
+        logger.error('Layout', '找不到面板元素');
+        return;
+    }
+    
+    // 设置左侧面板宽度
+    leftPanel.style.width = `${leftWidthPercent}%`;
+    
+    // 右侧面板自动占据剩余空间（通过flex: 1）
+    logger.log('Layout', `应用布局: 左侧 ${leftWidthPercent}%`);
+}
+
+function getCurrentLeftPanelWidth() {
+    const leftPanel = document.querySelector('.left-panel');
+    const mainContent = document.querySelector('.main-content');
+    
+    if (!leftPanel || !mainContent) {
+        return DEFAULT_CONFIG.defaultLeftPanelWidth;
+    }
+    
+    const leftWidth = leftPanel.offsetWidth;
+    const totalWidth = mainContent.offsetWidth;
+    
+    if (totalWidth === 0) {
+        return DEFAULT_CONFIG.defaultLeftPanelWidth;
+    }
+    
+    return Math.round((leftWidth / totalWidth) * 100);
+}
+
+async function loadLayoutConfig() {
+    try {
+        const config = await ipcRenderer.invoke('load-layout-config');
+        return config?.leftPanelWidth || null;
+    } catch (error) {
+        logger.error('Layout', '加载布局配置失败:', error);
+        return null;
+    }
+}
+
+async function saveLayoutConfig(leftWidthPercent) {
+    try {
+        await ipcRenderer.invoke('save-layout-config', {
+            leftPanelWidth: leftWidthPercent
+        });
+        logger.log('Layout', `布局配置已保存: ${leftWidthPercent}%`);
+    } catch (error) {
+        logger.error('Layout', '保存布局配置失败:', error);
+    }
 }
