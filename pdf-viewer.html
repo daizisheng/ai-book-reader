@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>PDF Viewer</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            background-color: #1e1e1e;
+            overflow: hidden;
+        }
+        #pdfContainer {
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+        }
+        #pdfViewer {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .page {
+            margin: 10px auto;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+            background-color: white;
+        }
+    </style>
+</head>
+<body>
+    <div id="pdfContainer">
+        <div id="pdfViewer"></div>
+    </div>
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+        let pdfDoc = null;
+        let currentPage = 1;
+        let totalPages = 0;
+        let pageCache = new Map();
+        let isRendering = false;
+        let pdfPath = null;
+        let currentPdfPage = null;
+        let resizeObserver = null;
+
+        // 获取URL参数
+        const urlParams = new URLSearchParams(window.location.search);
+        pdfPath = urlParams.get('file');
+        currentPage = parseInt(urlParams.get('page')) || 1;
+
+        // 计算适合容器高度的缩放比例
+        function calculateScale(page) {
+            const container = document.getElementById('pdfContainer');
+            const containerHeight = container.clientHeight;
+            const containerWidth = container.clientWidth;
+            
+            // 获取PDF页面的原始尺寸
+            const viewport = page.getViewport({ scale: 1.0 });
+            const pageWidth = viewport.width;
+            const pageHeight = viewport.height;
+            
+            // 计算适合容器高度的缩放比例
+            const scaleHeight = (containerHeight - 20) / pageHeight; // 减去margin
+            const scaleWidth = (containerWidth - 20) / pageWidth; // 减去margin
+            const baseScale = Math.min(scaleHeight, scaleWidth);
+
+            // 增加DPI以提高清晰度
+            const dpi = window.devicePixelRatio || 1;
+            return baseScale * dpi;
+        }
+
+        // 预加载下一页
+        async function preloadNextPage() {
+            if (currentPage < totalPages) {
+                const nextPage = currentPage + 1;
+                if (!pageCache.has(nextPage)) {
+                    try {
+                        const page = await pdfDoc.getPage(nextPage);
+                        const scale = calculateScale(page);
+                        const viewport = page.getViewport({ scale });
+                        const canvas = document.createElement('canvas');
+                        const context = canvas.getContext('2d', { alpha: false });
+                        
+                        // 设置canvas的物理像素大小
+                        canvas.width = viewport.width;
+                        canvas.height = viewport.height;
+                        
+                        // 设置canvas的CSS像素大小
+                        const dpi = window.devicePixelRatio || 1;
+                        canvas.style.width = `${viewport.width / dpi}px`;
+                        canvas.style.height = `${viewport.height / dpi}px`;
+                        
+                        // 设置渲染质量
+                        context.imageSmoothingEnabled = true;
+                        context.imageSmoothingQuality = 'high';
+                        
+                        await page.render({
+                            canvasContext: context,
+                            viewport: viewport,
+                            intent: 'display'
+                        }).promise;
+                        
+                        pageCache.set(nextPage, canvas);
+                    } catch (error) {
+                        console.error('预加载页面失败:', error);
+                    }
+                }
+            }
+        }
+
+        // 修改渲染函数
+        async function renderPage(pageNumber) {
+            if (isRendering) return;
+            isRendering = true;
+            
+            try {
+                const page = await pdfDoc.getPage(pageNumber);
+                const scale = calculateScale(page);
+                const viewport = page.getViewport({ scale });
+
+                // 检查缓存
+                if (pageCache.has(pageNumber)) {
+                    const cachedCanvas = pageCache.get(pageNumber);
+                    if (cachedCanvas.width === viewport.width && cachedCanvas.height === viewport.height) {
+                        const container = document.getElementById('pdfViewer');
+                        container.innerHTML = '';
+                        container.appendChild(cachedCanvas);
+                        currentPage = pageNumber;
+                        isRendering = false;
+                        return;
+                    }
+                }
+
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d', { alpha: false });
+                
+                // 设置canvas的物理像素大小
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+                
+                // 设置canvas的CSS像素大小
+                const dpi = window.devicePixelRatio || 1;
+                canvas.style.width = `${viewport.width / dpi}px`;
+                canvas.style.height = `${viewport.height / dpi}px`;
+
+                // 设置渲染质量
+                context.imageSmoothingEnabled = true;
+                context.imageSmoothingQuality = 'high';
+
+                // 添加淡入效果
+                canvas.style.opacity = '0';
+                canvas.style.transition = 'opacity 0.2s ease-in-out';
+
+                const container = document.getElementById('pdfViewer');
+                container.innerHTML = '';
+                container.appendChild(canvas);
+
+                await page.render({
+                    canvasContext: context,
+                    viewport: viewport,
+                    intent: 'display'
+                }).promise;
+
+                // 触发淡入效果
+                requestAnimationFrame(() => {
+                    canvas.style.opacity = '1';
+                });
+
+                // 更新缓存
+                pageCache.set(pageNumber, canvas);
+                currentPage = pageNumber;
+                
+                // 预加载下一页
+                preloadNextPage();
+                
+                // 清理旧缓存
+                if (pageCache.size > 3) {
+                    const keysToDelete = Array.from(pageCache.keys())
+                        .filter(key => Math.abs(key - pageNumber) > 1);
+                    keysToDelete.forEach(key => pageCache.delete(key));
+                }
+            } catch (error) {
+                console.error('渲染页面失败:', error);
+            } finally {
+                isRendering = false;
+            }
+        }
+
+        // 修改加载PDF的函数
+        async function loadPDF(url) {
+            try {
+                const loadingTask = pdfjsLib.getDocument(url);
+                pdfDoc = await loadingTask.promise;
+                totalPages = pdfDoc.numPages;
+                
+                // 通知父窗口PDF已加载
+                window.parent.postMessage({
+                    type: 'pdf-loaded',
+                    page: currentPage,
+                    totalPages: totalPages
+                }, '*');
+                
+                // 渲染第一页
+                await renderPage(currentPage);
+
+                // 设置ResizeObserver监听容器大小变化
+                if (resizeObserver) {
+                    resizeObserver.disconnect();
+                }
+                resizeObserver = new ResizeObserver(() => {
+                    renderPage(currentPage); // 重新渲染当前页以适应新尺寸
+                });
+                resizeObserver.observe(document.getElementById('pdfContainer'));
+            } catch (error) {
+                console.error('加载PDF失败:', error);
+                window.parent.postMessage({
+                    type: 'pdf-error',
+                    error: error.message
+                }, '*');
+            }
+        }
+
+        // 监听来自父窗口的消息
+        window.addEventListener('message', (event) => {
+            if (event.data.type === 'goToPage') {
+                renderPage(event.data.page);
+            }
+        });
+
+        // 初始加载
+        if (pdfPath) {
+            loadPDF(pdfPath);
+        }
+    </script>
+</body>
+</html> 
