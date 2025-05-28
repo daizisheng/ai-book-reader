@@ -175,9 +175,37 @@ leftWebview.addEventListener('ipc-message', (event) => {
 leftWebview.addEventListener('did-finish-load', () => {
     logger.log('Left Webview', 'PDF页面加载完成');
     // 延迟获取PDF信息，确保PDF.js完全初始化
-    setTimeout(() => {
+    safeSetTimeout(() => {
         getPDFInfo();
     }, 100);
+});
+
+// 添加错误恢复机制
+let retryCount = 0;
+const maxRetries = 3;
+
+const retryLoadPDF = () => {
+    if (retryCount < maxRetries) {
+        retryCount++;
+        logger.log('PDF Load Retry', `重试加载PDF，第${retryCount}次`);
+        safeSetTimeout(() => {
+            leftWebview.reload();
+        }, 1000 * retryCount); // 递增延迟
+    } else {
+        logger.error('PDF Load', 'PDF加载失败，已达到最大重试次数');
+        const notification = new Notification('PDF加载失败', {
+            body: '请检查文件是否存在或重新打开',
+            silent: true
+        });
+    }
+};
+
+// 监听PDF加载错误
+leftWebview.addEventListener('did-fail-load', (event) => {
+    if (event.errorCode !== -3) { // -3是用户取消，不需要重试
+        logger.error('PDF Load', 'PDF加载失败:', event.errorDescription);
+        retryLoadPDF();
+    }
 });
 
 // 标记是否已加载过 ChatGPT
@@ -717,7 +745,7 @@ ipcRenderer.on('file-opened', async (event, filePath) => {
         }
         
         // 延迟获取PDF信息
-        setTimeout(() => {
+        safeSetTimeout(() => {
             getPDFInfo();
         }, 100);
         
@@ -1340,6 +1368,26 @@ saveSettings.addEventListener('click', async () => {
 
 // PDF控制相关变量
 let currentPDFPage = 1;
+let activeTimers = new Set(); // 跟踪活跃的定时器
+
+// 安全的setTimeout包装器
+function safeSetTimeout(callback, delay) {
+    const timerId = setTimeout(() => {
+        activeTimers.delete(timerId);
+        callback();
+    }, delay);
+    activeTimers.add(timerId);
+    return timerId;
+}
+
+// 清理所有定时器
+function clearAllTimers() {
+    activeTimers.forEach(timerId => {
+        clearTimeout(timerId);
+    });
+    activeTimers.clear();
+    logger.log('Timer Management', `清理了${activeTimers.size}个定时器`);
+}
 
 // PDF URL参数控制函数
 function buildPDFUrl(filePath, page = null) {
@@ -1616,3 +1664,26 @@ async function saveLayoutConfig(leftWidthPercent) {
         logger.error('Layout', '保存布局配置失败:', error);
     }
 }
+
+// 监听窗口关闭事件，清理资源
+window.addEventListener('beforeunload', () => {
+    logger.log('App Cleanup', '应用即将关闭，清理资源');
+    
+    // 清理所有定时器
+    clearAllTimers();
+    
+    // 断开 ResizeObserver
+    if (typeof resizeObserver !== 'undefined' && resizeObserver) {
+        resizeObserver.disconnect();
+    }
+    
+    // 清理webview事件监听器
+    if (leftWebview) {
+        leftWebview.removeAllListeners?.();
+    }
+    if (rightWebview) {
+        rightWebview.removeAllListeners?.();
+    }
+    
+    logger.log('App Cleanup', '资源清理完成');
+});

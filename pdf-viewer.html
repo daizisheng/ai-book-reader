@@ -46,11 +46,50 @@
         let pdfPath = null;
         let currentPdfPage = null;
         let resizeObserver = null;
+        let maxCacheSize = 5; // 最大缓存页数
+        let memoryThreshold = 100 * 1024 * 1024; // 100MB内存阈值
 
         // 获取URL参数
         const urlParams = new URLSearchParams(window.location.search);
         pdfPath = urlParams.get('file');
         currentPage = parseInt(urlParams.get('page')) || 1;
+
+        // 监控内存使用
+        function checkMemoryUsage() {
+            if (performance.memory) {
+                const memoryInfo = performance.memory;
+                const usedMemory = memoryInfo.usedJSHeapSize;
+                
+                // 如果内存使用超过阈值，减少缓存
+                if (usedMemory > memoryThreshold) {
+                    maxCacheSize = Math.max(2, maxCacheSize - 1);
+                    console.log('内存使用过高，减少缓存大小到:', maxCacheSize);
+                    cleanupCache();
+                } else if (usedMemory < memoryThreshold * 0.5 && maxCacheSize < 5) {
+                    maxCacheSize = Math.min(5, maxCacheSize + 1);
+                    console.log('内存使用正常，增加缓存大小到:', maxCacheSize);
+                }
+            }
+        }
+
+        // 智能缓存清理
+        function cleanupCache() {
+            if (pageCache.size > maxCacheSize) {
+                const keysToDelete = Array.from(pageCache.keys())
+                    .filter(key => Math.abs(key - currentPage) > Math.floor(maxCacheSize / 2))
+                    .sort((a, b) => Math.abs(b - currentPage) - Math.abs(a - currentPage));
+                
+                // 删除距离当前页最远的页面
+                const deleteCount = pageCache.size - maxCacheSize;
+                for (let i = 0; i < deleteCount && i < keysToDelete.length; i++) {
+                    pageCache.delete(keysToDelete[i]);
+                    console.log('清理缓存页面:', keysToDelete[i]);
+                }
+            }
+        }
+
+        // 定期检查内存使用
+        setInterval(checkMemoryUsage, 30000); // 30秒检查一次
 
         // 计算适合容器高度的缩放比例
         function calculateScale(page) {
@@ -177,12 +216,8 @@
                 // 预加载下一页
                 preloadNextPage();
                 
-                // 清理旧缓存
-                if (pageCache.size > 3) {
-                    const keysToDelete = Array.from(pageCache.keys())
-                        .filter(key => Math.abs(key - pageNumber) > 1);
-                    keysToDelete.forEach(key => pageCache.delete(key));
-                }
+                // 智能清理缓存
+                cleanupCache();
             } catch (error) {
                 console.error('渲染页面失败:', error);
             } finally {
