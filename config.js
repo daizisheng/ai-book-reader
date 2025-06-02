@@ -12,6 +12,9 @@ const DEFAULT_CONFIG = {
     // 默认布局设置
     defaultLeftPanelWidth: 50, // 左侧面板宽度百分比
     
+    // 默认颜色模式设置
+    defaultColorMode: 'normal', // 默认颜色模式：normal, invert, dark, sepia, grayscale-invert
+    
     // 等待时间配置（毫秒）
     waitTimes: {
         imageUploadWait: 3000,     // 图片上传等待时间

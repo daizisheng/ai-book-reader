@@ -29,6 +29,23 @@
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
             background-color: white;
         }
+        
+        /* 反色模式样式 */
+        .invert-mode #pdfViewer {
+            filter: invert(100%);
+        }
+        
+        .dark-mode #pdfViewer {
+            filter: invert(90%) hue-rotate(180deg);
+        }
+        
+        .sepia-mode #pdfViewer {
+            filter: invert(85%) sepia(80%) contrast(110%) brightness(95%);
+        }
+        
+        .grayscale-invert #pdfViewer {
+            filter: grayscale(100%) invert(100%);
+        }
     </style>
 </head>
 <body>
@@ -48,11 +65,67 @@
         let resizeObserver = null;
         let maxCacheSize = 5; // 最大缓存页数
         let memoryThreshold = 100 * 1024 * 1024; // 100MB内存阈值
+        
+        // 添加颜色模式控制
+        let colorMode = 'normal'; // normal, invert, dark, sepia, grayscale-invert
 
         // 获取URL参数
         const urlParams = new URLSearchParams(window.location.search);
         pdfPath = urlParams.get('file');
         currentPage = parseInt(urlParams.get('page')) || 1;
+        
+        // 从URL参数获取颜色模式
+        const urlColorMode = urlParams.get('colorMode');
+        if (urlColorMode) {
+            colorMode = urlColorMode;
+            applyColorMode(colorMode);
+        }
+
+        // 应用颜色模式
+        function applyColorMode(mode) {
+            const body = document.body;
+            // 移除所有颜色模式类
+            body.classList.remove('invert-mode', 'dark-mode', 'sepia-mode', 'grayscale-invert');
+            
+            switch(mode) {
+                case 'invert':
+                    body.classList.add('invert-mode');
+                    break;
+                case 'dark':
+                    body.classList.add('dark-mode');
+                    break;
+                case 'sepia':
+                    body.classList.add('sepia-mode');
+                    break;
+                case 'grayscale-invert':
+                    body.classList.add('grayscale-invert');
+                    break;
+                default:
+                    // normal mode, no classes needed
+                    break;
+            }
+            colorMode = mode;
+            
+            // 通知父窗口颜色模式已更改
+            window.parent.postMessage({
+                type: 'color-mode-changed',
+                colorMode: mode
+            }, '*');
+        }
+
+        // 切换颜色模式
+        function toggleColorMode() {
+            const modes = ['normal', 'invert', 'dark', 'sepia', 'grayscale-invert'];
+            const currentIndex = modes.indexOf(colorMode);
+            const nextIndex = (currentIndex + 1) % modes.length;
+            applyColorMode(modes[nextIndex]);
+            return modes[nextIndex];
+        }
+        
+        // 设置特定颜色模式
+        function setColorMode(mode) {
+            applyColorMode(mode);
+        }
 
         // 监控内存使用
         function checkMemoryUsage() {
@@ -276,8 +349,18 @@
         window.addEventListener('message', (event) => {
             if (event.data.type === 'goToPage') {
                 renderPage(event.data.page);
+            } else if (event.data.type === 'setColorMode') {
+                setColorMode(event.data.colorMode);
+            } else if (event.data.type === 'toggleColorMode') {
+                toggleColorMode();
             }
         });
+
+        // 暴露函数给父窗口
+        window.setColorMode = setColorMode;
+        window.toggleColorMode = toggleColorMode;
+        window.applyColorMode = applyColorMode;
+        window.getCurrentColorMode = () => colorMode;
 
         // 初始加载
         if (pdfPath) {

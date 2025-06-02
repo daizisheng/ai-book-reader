@@ -34,6 +34,7 @@ const pageInput = document.getElementById('pageInput');
 const totalPagesDisplay = document.getElementById('totalPagesDisplay');
 const prevPageButton = document.getElementById('prevPageButton');
 const nextPageButton = document.getElementById('nextPageButton');
+const colorModeButton = document.getElementById('colorModeButton');
 const bookTitleDisplay = document.getElementById('bookTitleDisplay');
 const bookAuthorDisplay = document.getElementById('bookAuthorDisplay');
 const layoutInput = document.getElementById('layoutInput');
@@ -189,6 +190,15 @@ window.addEventListener('message', (event) => {
         saveCurrentPageState();
     } else if (event.data && event.data.type === 'pdf-error') {
         logger.error('PDF Error via postMessage', event.data.error);
+    } else if (event.data && event.data.type === 'color-mode-changed') {
+        const { colorMode } = event.data;
+        logger.log('Color Mode Changed', `颜色模式已切换到: ${colorMode}`);
+        // 更新当前颜色模式状态
+        currentColorMode = colorMode;
+        // 可以在这里添加UI更新逻辑，比如更新按钮图标或提示文本
+        updateColorModeButton(colorMode);
+        // 自动保存颜色模式配置
+        saveColorModeConfig(colorMode);
     }
 });
 
@@ -294,6 +304,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // 初始化布局
     await initializeLayout();
+    
+    // 初始化颜色模式
+    await initializeColorMode();
     
     // 初始化按钮状态
     updateButtonStates();
@@ -751,7 +764,7 @@ ipcRenderer.on('file-opened', async (event, filePath) => {
         }
         
         // 使用PDF URL参数构建URL
-        const fileUrl = buildPDFUrl(filePath, currentPDFPage);
+        const fileUrl = buildPDFUrl(filePath, currentPDFPage, currentColorMode);
         logger.log('File Opened', '转换后的 URL:', fileUrl);
         
         // 在左侧 webview 中加载 PDF
@@ -843,6 +856,47 @@ nextPageButton.addEventListener('click', async () => {
         return;
     }
     await nextPage();
+});
+
+// 添加颜色模式切换功能
+colorModeButton.addEventListener('click', async () => {
+    logger.log('Color Mode Button', '用户点击了颜色模式按钮');
+    if (colorModeButton.disabled) {
+        logger.log('Color Mode Button', '颜色模式按钮被禁用，忽略点击');
+        return;
+    }
+    
+    // 检查是否有打开的文件
+    if (!currentFilePath) {
+        logger.warn('Color Mode Button', '没有打开的文件');
+        return;
+    }
+    
+    try {
+        // 调用PDF查看器的颜色模式切换功能，并获取新的颜色模式
+        const result = await leftWebview.executeJavaScript(`
+            if (typeof window.toggleColorMode === 'function') {
+                const newMode = window.toggleColorMode();
+                newMode;
+            } else {
+                null;
+            }
+        `);
+        
+        if (result) {
+            logger.log('Color Mode Button', '颜色模式切换成功，新模式:', result);
+            // 更新本地状态
+            currentColorMode = result;
+            // 更新按钮外观
+            updateColorModeButton(result);
+            // 直接保存配置（作为备用，防止postMessage机制失败）
+            await saveColorModeConfig(result);
+        } else {
+            logger.warn('Color Mode Button', 'PDF查看器的toggleColorMode函数不可用');
+        }
+    } catch (error) {
+        logger.error('Color Mode Button', '颜色模式切换失败:', error);
+    }
 });
 
 // 添加截图功能
@@ -1118,6 +1172,7 @@ function updateButtonStates() {
     pageInput.disabled = !hasFile;
     prevPageButton.disabled = !hasFile;
     nextPageButton.disabled = !hasFile;
+    colorModeButton.disabled = !hasFile;
     // 布局输入框始终可用
     layoutInput.disabled = false;
     
@@ -1128,22 +1183,26 @@ function updateButtonStates() {
         pageInput.style.opacity = '1';
         prevPageButton.style.opacity = '1';
         nextPageButton.style.opacity = '1';
+        colorModeButton.style.opacity = '1';
         smartButton.style.cursor = 'pointer';
         settingsButton.style.cursor = 'pointer';
         pageInput.style.cursor = 'text';
         prevPageButton.style.cursor = 'pointer';
         nextPageButton.style.cursor = 'pointer';
+        colorModeButton.style.cursor = 'pointer';
     } else {
         smartButton.style.opacity = '0.5';
         settingsButton.style.opacity = '0.5';
         pageInput.style.opacity = '0.5';
         prevPageButton.style.opacity = '0.5';
         nextPageButton.style.opacity = '0.5';
+        colorModeButton.style.opacity = '0.5';
         smartButton.style.cursor = 'not-allowed';
         settingsButton.style.cursor = 'not-allowed';
         pageInput.style.cursor = 'not-allowed';
         prevPageButton.style.cursor = 'not-allowed';
         nextPageButton.style.cursor = 'not-allowed';
+        colorModeButton.style.cursor = 'not-allowed';
         // 布局输入框始终可用
         layoutInput.style.opacity = '1';
         layoutInput.style.cursor = 'text';
@@ -1168,6 +1227,7 @@ function updateButtonStates() {
         pageInputDisabled: !hasFile,
         prevPageDisabled: !hasFile,
         nextPageDisabled: !hasFile,
+        colorModeDisabled: !hasFile,
         currentPage: currentPDFPage
     });
 }
@@ -1314,7 +1374,8 @@ async function saveSettingsToFiles() {
         // Save global settings
         const globalSettings = {
             startupPrompt: startupPrompt.value,
-            enableNotifications: enableNotifications.checked
+            enableNotifications: enableNotifications.checked,
+            colorMode: currentColorMode  // 保存当前颜色模式
         };
         await ipcRenderer.invoke('save-global-settings', globalSettings);
 
@@ -1390,6 +1451,7 @@ saveSettings.addEventListener('click', async () => {
 
 // PDF控制相关变量
 let currentPDFPage = 1;
+let currentColorMode = 'normal'; // 当前颜色模式
 let activeTimers = new Set(); // 跟踪活跃的定时器
 
 // 安全的setTimeout包装器
@@ -1404,20 +1466,29 @@ function safeSetTimeout(callback, delay) {
 
 // 清理所有定时器
 function clearAllTimers() {
-    activeTimers.forEach(timerId => {
+    for (const timerId of activeTimers) {
         clearTimeout(timerId);
-    });
+    }
     activeTimers.clear();
     logger.log('Timer Management', `清理了${activeTimers.size}个定时器`);
 }
 
 // PDF URL参数控制函数
-function buildPDFUrl(filePath, page = null) {
+function buildPDFUrl(filePath, page = null, colorMode = null) {
     const baseUrl = `file://${__dirname}/pdf-viewer.html`;
+    const params = new URLSearchParams();
+    
+    params.set('file', filePath);
+    
     if (page !== null && page > 0) {
-        return `${baseUrl}?file=${encodeURIComponent(filePath)}&page=${page}`;
+        params.set('page', page.toString());
     }
-    return `${baseUrl}?file=${encodeURIComponent(filePath)}`;
+    
+    if (colorMode && colorMode !== 'normal') {
+        params.set('colorMode', colorMode);
+    }
+    
+    return `${baseUrl}?${params.toString()}`;
 }
 
 // 导航到指定页面
@@ -1594,6 +1665,25 @@ async function initializeLayout() {
     logger.log('Layout', `布局初始化完成，左侧宽度: ${leftWidth}%`);
 }
 
+// 初始化颜色模式
+async function initializeColorMode() {
+    try {
+        // 加载保存的颜色模式配置
+        const savedColorMode = await loadColorModeConfig();
+        currentColorMode = savedColorMode;
+        
+        // 更新按钮外观
+        updateColorModeButton(currentColorMode);
+        
+        logger.log('Color Mode', `颜色模式初始化完成，当前模式: ${currentColorMode}`);
+    } catch (error) {
+        logger.error('Color Mode', '颜色模式初始化失败:', error);
+        // 如果初始化失败，使用默认模式
+        currentColorMode = 'normal';
+        updateColorModeButton(currentColorMode);
+    }
+}
+
 function setupLayoutInputListeners() {
     // 监听回车键
     layoutInput.addEventListener('keydown', (event) => {
@@ -1704,6 +1794,48 @@ async function saveLayoutConfig(leftWidthPercent) {
     }
 }
 
+// 加载颜色模式设置
+async function loadColorModeConfig() {
+    try {
+        const globalSettings = await ipcRenderer.invoke('load-global-settings');
+        if (globalSettings && globalSettings.colorMode) {
+            return globalSettings.colorMode;
+        }
+        
+        // 如果没有保存的设置，使用配置文件中的默认值
+        if (typeof DEFAULT_CONFIG !== 'undefined' && DEFAULT_CONFIG.defaultColorMode) {
+            return DEFAULT_CONFIG.defaultColorMode;
+        }
+        
+        return 'normal'; // 最终备用默认值
+    } catch (error) {
+        logger.error('Color Mode', '加载颜色模式配置失败:', error);
+        return 'normal';
+    }
+}
+
+// 保存颜色模式设置
+async function saveColorModeConfig(colorMode) {
+    try {
+        // 加载现有的全局设置
+        const existingSettings = await ipcRenderer.invoke('load-global-settings') || {};
+        
+        // 更新颜色模式
+        const updatedSettings = {
+            ...existingSettings,
+            colorMode: colorMode
+        };
+        
+        // 保存回全局设置
+        await ipcRenderer.invoke('save-global-settings', updatedSettings);
+        logger.log('Color Mode', `颜色模式已保存: ${colorMode}`);
+        return true;
+    } catch (error) {
+        logger.error('Color Mode', '保存颜色模式配置失败:', error);
+        return false;
+    }
+}
+
 // 监听窗口关闭事件，清理资源
 window.addEventListener('beforeunload', () => {
     logger.log('App Cleanup', '应用即将关闭，清理资源');
@@ -1726,3 +1858,46 @@ window.addEventListener('beforeunload', () => {
     
     logger.log('App Cleanup', '资源清理完成');
 });
+
+// Update color mode button appearance based on current mode
+function updateColorModeButton(colorMode) {
+    if (!colorModeButton) return;
+    
+    // 更新按钮标题提示
+    const modeNames = {
+        'normal': '正常模式',
+        'invert': '反色模式',
+        'dark': '深色模式',
+        'sepia': '护眼模式',
+        'grayscale-invert': '灰度反色'
+    };
+    
+    const currentModeName = modeNames[colorMode] || colorMode;
+    colorModeButton.title = `当前: ${currentModeName}，点击切换颜色模式`;
+    
+    // 可以根据不同模式改变按钮图标颜色
+    const svg = colorModeButton.querySelector('svg');
+    if (svg) {
+        switch(colorMode) {
+            case 'normal':
+                svg.style.color = '';
+                break;
+            case 'invert':
+                svg.style.color = '#ff6b6b';
+                break;
+            case 'dark':
+                svg.style.color = '#4ecdc4';
+                break;
+            case 'sepia':
+                svg.style.color = '#ffd93d';
+                break;
+            case 'grayscale-invert':
+                svg.style.color = '#95a5a6';
+                break;
+            default:
+                svg.style.color = '';
+        }
+    }
+    
+    logger.log('Color Mode Button', '按钮外观已更新:', { mode: colorMode, title: colorModeButton.title });
+}
