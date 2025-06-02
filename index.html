@@ -122,6 +122,14 @@
             cursor: not-allowed;
         }
 
+        .total-pages-display {
+            -webkit-app-region: no-drag;
+            color: #999;
+            font-size: 12px;
+            margin-right: 8px;
+            margin-left: 2px;
+        }
+
         .layout-input {
             -webkit-app-region: no-drag;
             background-color: #2d2d2d;
@@ -445,6 +453,7 @@
             <input type="number" id="layoutInput" class="layout-input" title="左侧面板宽度百分比" min="20" max="80" value="50" placeholder="50">
             <span class="layout-label">%</span>
             <input type="number" id="pageInput" class="page-input" title="当前页码，按回车跳转" min="1" placeholder="1">
+            <span id="totalPagesDisplay" class="total-pages-display">/ 0</span>
             <button class="smart-button" id="prevPageButton" title="上一页">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M15 18l-6-6 6-6"/>

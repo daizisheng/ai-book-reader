@@ -213,6 +213,9 @@
                 pageCache.set(pageNumber, canvas);
                 currentPage = pageNumber;
                 
+                // 更新全局变量
+                window.currentPage = currentPage;
+                
                 // 预加载下一页
                 preloadNextPage();
                 
@@ -228,16 +231,26 @@
         // 修改加载PDF的函数
         async function loadPDF(url) {
             try {
+                console.log('开始加载PDF:', url);
                 const loadingTask = pdfjsLib.getDocument(url);
                 pdfDoc = await loadingTask.promise;
                 totalPages = pdfDoc.numPages;
                 
+                // 设置全局变量，供父窗口访问
+                window.currentPage = currentPage;
+                window.totalPages = totalPages;
+                
+                console.log('PDF加载成功，总页数:', totalPages, '当前页:', currentPage);
+                console.log('设置全局变量: window.currentPage =', window.currentPage, 'window.totalPages =', window.totalPages);
+                
                 // 通知父窗口PDF已加载
-                window.parent.postMessage({
+                const message = {
                     type: 'pdf-loaded',
                     page: currentPage,
                     totalPages: totalPages
-                }, '*');
+                };
+                console.log('发送消息到父窗口:', message);
+                window.parent.postMessage(message, '*');
                 
                 // 渲染第一页
                 await renderPage(currentPage);

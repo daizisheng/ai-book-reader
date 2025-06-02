@@ -31,6 +31,7 @@ const leftWebview = document.getElementById('leftWebview');
 const rightWebview = document.getElementById('rightWebview');
 const smartButton = document.getElementById('smartButton');
 const pageInput = document.getElementById('pageInput');
+const totalPagesDisplay = document.getElementById('totalPagesDisplay');
 const prevPageButton = document.getElementById('prevPageButton');
 const nextPageButton = document.getElementById('nextPageButton');
 const bookTitleDisplay = document.getElementById('bookTitleDisplay');
@@ -165,9 +166,29 @@ leftWebview.addEventListener('ipc-message', (event) => {
         logger.log('PDF Loaded', `页面 ${page}/${totalPages} 已加载`);
         currentPDFPage = page;
         pageInput.value = page;
+        totalPagesDisplay.textContent = `/ ${totalPages}`;
         saveCurrentPageState();
     } else if (event.channel === 'pdf-error') {
         logger.error('PDF Error', event.args[0]);
+    }
+});
+
+// 监听来自PDF viewer的postMessage消息
+window.addEventListener('message', (event) => {
+    console.log('收到message事件:', event);
+    console.log('事件来源:', event.source);
+    console.log('事件数据:', event.data);
+    
+    if (event.data && event.data.type === 'pdf-loaded') {
+        const { page, totalPages } = event.data;
+        logger.log('PDF Loaded via postMessage', `页面 ${page}/${totalPages} 已加载`);
+        console.log('更新总页数显示为:', `/ ${totalPages}`);
+        currentPDFPage = page;
+        pageInput.value = page;
+        totalPagesDisplay.textContent = `/ ${totalPages}`;
+        saveCurrentPageState();
+    } else if (event.data && event.data.type === 'pdf-error') {
+        logger.error('PDF Error via postMessage', event.data.error);
     }
 });
 
@@ -1134,6 +1155,7 @@ function updateButtonStates() {
     } else {
         pageInput.value = '';
         pageInput.placeholder = '1';
+        totalPagesDisplay.textContent = '/ 0';
     }
     
     // 更新设置界面中的文件相关字段状态
@@ -1431,19 +1453,36 @@ async function previousPage() {
     }
 }
 // 获取PDF信息的函数
-function getPDFInfo() {
+async function getPDFInfo() {
     if (!leftWebview) return;
     
-    // 从webview中获取当前页面信息
-    leftWebview.executeJavaScript(`
-        if (window.currentPage) {
-            window.parent.postMessage({
-                type: 'pdf-loaded',
-                page: window.currentPage,
-                totalPages: window.totalPages
-            }, '*');
+    try {
+        // 直接从webview中获取PDF信息
+        const result = await leftWebview.executeJavaScript(`
+            if (window.totalPages && window.currentPage) {
+                ({ currentPage: window.currentPage, totalPages: window.totalPages });
+            } else {
+                null;
+            }
+        `);
+        
+        if (result) {
+            const { currentPage, totalPages } = result;
+            logger.log('PDF Info', `直接获取PDF信息: 页面 ${currentPage}/${totalPages}`);
+            currentPDFPage = currentPage;
+            pageInput.value = currentPage;
+            totalPagesDisplay.textContent = `/ ${totalPages}`;
+            saveCurrentPageState();
+        } else {
+            logger.warn('PDF Info', 'PDF信息尚未准备好，稍后重试');
+            // 如果信息还没准备好，1秒后重试
+            safeSetTimeout(() => {
+                getPDFInfo();
+            }, 1000);
         }
-    `);
+    } catch (error) {
+        logger.error('PDF Info', '获取PDF信息失败:', error);
+    }
 }
 
 // 保存当前页面状态
