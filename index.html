@@ -450,6 +450,19 @@
             <div class="book-author" id="bookAuthorDisplay"></div>
         </div>
         <div class="titlebar-buttons">
+            <button class="smart-button" id="colorModeButton" title="切换颜色模式">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="4"/>
+                    <path d="M12 2v2"/>
+                    <path d="M12 20v2"/>
+                    <path d="M4.93 4.93l1.41 1.41"/>
+                    <path d="M17.66 17.66l1.41 1.41"/>
+                    <path d="M2 12h2"/>
+                    <path d="M20 12h2"/>
+                    <path d="M6.34 17.66l-1.41 1.41"/>
+                    <path d="M19.07 4.93l-1.41 1.41"/>
+                </svg>
+            </button>
             <input type="number" id="layoutInput" class="layout-input" title="左侧面板宽度百分比" min="20" max="80" value="50" placeholder="50">
             <span class="layout-label">%</span>
             <input type="number" id="pageInput" class="page-input" title="当前页码，按回车跳转" min="1" placeholder="1">
@@ -462,19 +475,6 @@
             <button class="smart-button" id="nextPageButton" title="下一页">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M9 18l6-6-6-6"/>
-                </svg>
-            </button>
-            <button class="smart-button" id="colorModeButton" title="切换颜色模式">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="12" cy="12" r="4"/>
-                    <path d="M12 2v2"/>
-                    <path d="M12 20v2"/>
-                    <path d="M4.93 4.93l1.41 1.41"/>
-                    <path d="M17.66 17.66l1.41 1.41"/>
-                    <path d="M2 12h2"/>
-                    <path d="M20 12h2"/>
-                    <path d="M6.34 17.66l-1.41 1.41"/>
-                    <path d="M19.07 4.93l-1.41 1.41"/>
                 </svg>
             </button>
             <button class="smart-button" id="smartButton">
