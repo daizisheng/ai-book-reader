@@ -170,6 +170,82 @@
         sendButton.click();
         console.log('已点击SEND_BUTTON');
         
+        // 立即禁用自动滚动
+        console.log('🚫 禁用ChatGPT自动滚动1秒（发送按钮点击后）');
+        
+        // 禁用自动滚动函数
+        const disableAutoScroll = () => {
+            // 备份原始函数
+            const originalScrollTo = window.scrollTo;
+            const originalScrollIntoView = Element.prototype.scrollIntoView;
+            
+            let isScrollDisabled = true;
+            let userHasScrolled = false;
+            
+            // 覆盖 window.scrollTo
+            window.scrollTo = function(...args) {
+                if (isScrollDisabled && !userHasScrolled) {
+                    console.log('🚫 阻止自动滚动 (scrollTo)');
+                    return;
+                }
+                return originalScrollTo.apply(this, args);
+            };
+            
+            // 覆盖 Element.prototype.scrollIntoView
+            Element.prototype.scrollIntoView = function(...args) {
+                if (isScrollDisabled && !userHasScrolled) {
+                    console.log('🚫 阻止自动滚动 (scrollIntoView)');
+                    return;
+                }
+                return originalScrollIntoView.apply(this, args);
+            };
+            
+            // 检测用户手动滚动
+            const handleUserScroll = (event) => {
+                if (isScrollDisabled) {
+                    userHasScrolled = true;
+                    console.log('👆 检测到用户手动滚动，延长禁用时间至5秒');
+                    
+                    // 延长禁用时间到5秒
+                    setTimeout(() => {
+                        if (isScrollDisabled) {
+                            restoreScrollFunctions();
+                        }
+                    }, 4000); // 再等4秒（总共5秒）
+                }
+            };
+            
+            // 恢复滚动函数
+            const restoreScrollFunctions = () => {
+                isScrollDisabled = false;
+                window.scrollTo = originalScrollTo;
+                Element.prototype.scrollIntoView = originalScrollIntoView;
+                
+                // 移除事件监听器
+                window.removeEventListener('wheel', handleUserScroll);
+                window.removeEventListener('touchmove', handleUserScroll);
+                window.removeEventListener('scroll', handleUserScroll);
+                
+                console.log('✅ 自动滚动禁用已解除');
+            };
+            
+            // 添加用户滚动检测
+            window.addEventListener('wheel', handleUserScroll, { passive: true });
+            window.addEventListener('touchmove', handleUserScroll, { passive: true });
+            window.addEventListener('scroll', handleUserScroll, { passive: true });
+            
+            // 1秒后自动恢复（如果用户没有滚动）
+            setTimeout(() => {
+                if (isScrollDisabled && !userHasScrolled) {
+                    restoreScrollFunctions();
+                    console.log('✅ 自动滚动禁用已解除（1秒超时）');
+                }
+            }, 1000);
+        };
+        
+        // 执行滚动禁用
+        disableAutoScroll();
+        
         // 步骤5: 等待1秒，然后检查STOP_BUTTON是否出现
         console.log('步骤5: 等待STOP_BUTTON出现');
         await new Promise(resolve => setTimeout(resolve, 1000));
