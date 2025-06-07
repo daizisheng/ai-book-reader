@@ -312,6 +312,7 @@
                 // 设置全局变量，供父窗口访问
                 window.currentPage = currentPage;
                 window.totalPages = totalPages;
+                window.pdfDoc = pdfDoc; // 暴露pdfDoc供内存渲染使用
                 
                 console.log('PDF加载成功，总页数:', totalPages, '当前页:', currentPage);
                 console.log('设置全局变量: window.currentPage =', window.currentPage, 'window.totalPages =', window.totalPages);

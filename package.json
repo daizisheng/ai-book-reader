@@ -29,7 +29,6 @@
     "directories": {
       "output": "dist"
     },
-
     "mac": {
       "category": "public.app-category.productivity",
       "icon": "assets/icon.icns",
@@ -129,6 +128,7 @@
   "dependencies": {
     "electron-store": "^8.1.0",
     "jsdom": "^26.1.0",
+    "pdfjs-dist": "^5.3.31",
     "yargs": "^17.7.2"
   }
 }

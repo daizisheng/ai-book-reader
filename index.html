@@ -164,6 +164,64 @@
             margin-right: 8px;
         }
 
+        /* 讲解下一页按钮特殊样式 */
+        #explainNextButton {
+            min-width: 120px;
+            padding: 0 16px;
+            width: auto;
+            flex-shrink: 0;
+        }
+
+        #explainNextButton span {
+            font-size: 12px;
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: visible;
+        }
+
+        /* 按钮完成动画 */
+        .button-success-animation {
+            animation: successPulse 1.5s ease-in-out;
+            background-color: #4CAF50 !important;
+        }
+
+        @keyframes successPulse {
+            0% {
+                background-color: #4CAF50;
+                box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.7);
+                transform: scale(1);
+            }
+            25% {
+                background-color: #45a049;
+                box-shadow: 0 0 0 8px rgba(76, 175, 80, 0.3);
+                transform: scale(1.05);
+            }
+            50% {
+                background-color: #4CAF50;
+                box-shadow: 0 0 0 12px rgba(76, 175, 80, 0.1);
+                transform: scale(1.02);
+            }
+            75% {
+                background-color: #45a049;
+                box-shadow: 0 0 0 8px rgba(76, 175, 80, 0.2);
+                transform: scale(1.01);
+            }
+            100% {
+                background-color: transparent;
+                box-shadow: 0 0 0 0 rgba(76, 175, 80, 0);
+                transform: scale(1);
+            }
+        }
+
+        /* 成功状态的图标变化 */
+        .button-success-animation svg {
+            color: #fff !important;
+        }
+
+        .button-success-animation span {
+            color: #fff !important;
+        }
+
         .main-content {
             flex: 1;
             display: flex;
@@ -481,6 +539,9 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
                 </svg>
+            </button>
+            <button class="smart-button" id="explainNextButton" title="讲解下一页">
+                <span id="explainNextText">讲解1页</span>
             </button>
             <button class="smart-button" id="settingsButton">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

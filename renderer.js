@@ -34,6 +34,8 @@ const pageInput = document.getElementById('pageInput');
 const totalPagesDisplay = document.getElementById('totalPagesDisplay');
 const prevPageButton = document.getElementById('prevPageButton');
 const nextPageButton = document.getElementById('nextPageButton');
+const explainNextButton = document.getElementById('explainNextButton');
+const explainNextText = document.getElementById('explainNextText');
 const colorModeButton = document.getElementById('colorModeButton');
 const bookTitleDisplay = document.getElementById('bookTitleDisplay');
 const bookAuthorDisplay = document.getElementById('bookAuthorDisplay');
@@ -858,6 +860,37 @@ nextPageButton.addEventListener('click', async () => {
     await nextPage();
 });
 
+// 添加讲解下一页按钮功能
+explainNextButton.addEventListener('click', async () => {
+    logger.log('Explain Next Button', '用户点击了讲解下一页按钮');
+    if (explainNextButton.disabled) {
+        logger.log('Explain Next Button', '讲解下一页按钮被禁用，忽略点击');
+        return;
+    }
+    
+    try {
+        // 获取当前最大讲解页码
+        const pageState = await ipcRenderer.invoke('load-page-state', currentFileMD5);
+        let maxExplained = pageState?.maxExplainedPage || 0;
+        
+        // 如果maxExplained为0且有当前页码，用当前页码作为初始值
+        if (maxExplained === 0 && currentPDFPage > 0) {
+            maxExplained = currentPDFPage;
+            logger.log('Explain Next Button', `初始化最大讲解页码为当前页: ${maxExplained}`);
+        }
+        
+        const nextPageToExplain = maxExplained + 1;
+        
+        logger.log('Explain Next Button', `准备讲解第${nextPageToExplain}页（不切换显示页面）`);
+        
+        // 直接从PDF文件中截取指定页面，不改变当前显示
+        await captureSpecificPageAndExplain(nextPageToExplain, explainNextButton);
+        
+    } catch (error) {
+        logger.error('Explain Next Button', '讲解下一页失败:', error);
+    }
+});
+
 // 添加颜色模式切换功能
 colorModeButton.addEventListener('click', async () => {
     logger.log('Color Mode Button', '用户点击了颜色模式按钮');
@@ -991,11 +1024,18 @@ smartButton.addEventListener('click', async () => {
             switch (result) {
                 case 'success':
                     logger.log('Smart Button', '智能解释流程成功完成');
+                    
+                    // 显示智能讲解按钮的成功动画
+                    showButtonSuccessAnimation(smartButton);
+                    
                     // 成功完成，等待解读完成通知
-                    const successNotification = new Notification('开始解读', {
-                        body: '正在解读页面内容，完成后会通知您',
+                    const successNotification = new Notification('AI讲解已完成', {
+                        body: '第' + currentPDFPage + '页讲解已完成',
                         silent: true
                     });
+                    
+                    // 讲解成功，更新最大讲解页码
+                    await updateMaxExplainedPage(currentPDFPage);
                     return;
                     
                 case 'ai_working':
@@ -1172,6 +1212,7 @@ function updateButtonStates() {
     pageInput.disabled = !hasFile;
     prevPageButton.disabled = !hasFile;
     nextPageButton.disabled = !hasFile;
+    explainNextButton.disabled = !hasFile;
     colorModeButton.disabled = !hasFile;
     // 布局输入框始终可用
     layoutInput.disabled = false;
@@ -1183,12 +1224,14 @@ function updateButtonStates() {
         pageInput.style.opacity = '1';
         prevPageButton.style.opacity = '1';
         nextPageButton.style.opacity = '1';
+        explainNextButton.style.opacity = '1';
         colorModeButton.style.opacity = '1';
         smartButton.style.cursor = 'pointer';
         settingsButton.style.cursor = 'pointer';
         pageInput.style.cursor = 'text';
         prevPageButton.style.cursor = 'pointer';
         nextPageButton.style.cursor = 'pointer';
+        explainNextButton.style.cursor = 'pointer';
         colorModeButton.style.cursor = 'pointer';
     } else {
         smartButton.style.opacity = '0.5';
@@ -1196,12 +1239,14 @@ function updateButtonStates() {
         pageInput.style.opacity = '0.5';
         prevPageButton.style.opacity = '0.5';
         nextPageButton.style.opacity = '0.5';
+        explainNextButton.style.opacity = '0.5';
         colorModeButton.style.opacity = '0.5';
         smartButton.style.cursor = 'not-allowed';
         settingsButton.style.cursor = 'not-allowed';
         pageInput.style.cursor = 'not-allowed';
         prevPageButton.style.cursor = 'not-allowed';
         nextPageButton.style.cursor = 'not-allowed';
+        explainNextButton.style.cursor = 'not-allowed';
         colorModeButton.style.cursor = 'not-allowed';
         // 布局输入框始终可用
         layoutInput.style.opacity = '1';
@@ -1227,9 +1272,13 @@ function updateButtonStates() {
         pageInputDisabled: !hasFile,
         prevPageDisabled: !hasFile,
         nextPageDisabled: !hasFile,
+        explainNextDisabled: !hasFile,
         colorModeDisabled: !hasFile,
         currentPage: currentPDFPage
     });
+    
+    // 更新讲解下一页按钮的显示
+    updateExplainNextButton();
 }
 
 // Update book settings section state
@@ -1473,6 +1522,25 @@ function clearAllTimers() {
     logger.log('Timer Management', `清理了${activeTimers.size}个定时器`);
 }
 
+// 显示按钮成功动画
+function showButtonSuccessAnimation(buttonElement) {
+    if (!buttonElement) {
+        logger.warn('Button Animation', '按钮元素不存在');
+        return;
+    }
+    
+    logger.log('Button Animation', `开始播放按钮成功动画: ${buttonElement.id}`);
+    
+    // 添加成功动画类
+    buttonElement.classList.add('button-success-animation');
+    
+    // 1.5秒后移除动画类
+    safeSetTimeout(() => {
+        buttonElement.classList.remove('button-success-animation');
+        logger.log('Button Animation', `按钮成功动画完成: ${buttonElement.id}`);
+    }, 1500);
+}
+
 // PDF URL参数控制函数
 function buildPDFUrl(filePath, page = null, colorMode = null) {
     const baseUrl = `file://${__dirname}/pdf-viewer.html`;
@@ -1561,9 +1629,12 @@ async function saveCurrentPageState() {
     if (!currentFilePath || !currentFileMD5) return;
     
     try {
+        // 获取现有状态以保留maxExplainedPage
+        const existingState = await ipcRenderer.invoke('load-page-state', currentFileMD5);
         const pageState = {
             currentPage: currentPDFPage,
-            lastAccessed: new Date().toISOString()
+            lastAccessed: new Date().toISOString(),
+            maxExplainedPage: existingState?.maxExplainedPage || 0
         };
         
         await ipcRenderer.invoke('save-page-state', currentFileMD5, pageState);
@@ -1589,6 +1660,287 @@ async function loadPageState() {
     
     return null;
 }
+
+// 更新最大讲解页码
+async function updateMaxExplainedPage(pageNumber) {
+    if (!currentFilePath || !currentFileMD5) return;
+    
+    try {
+        const pageState = await ipcRenderer.invoke('load-page-state', currentFileMD5);
+        const currentMaxExplained = pageState?.maxExplainedPage || 0;
+        
+        if (pageNumber > currentMaxExplained) {
+            const newPageState = {
+                currentPage: pageState?.currentPage || currentPDFPage,
+                lastAccessed: new Date().toISOString(),
+                maxExplainedPage: pageNumber
+            };
+            
+            await ipcRenderer.invoke('save-page-state', currentFileMD5, newPageState);
+            logger.log('Max Explained Page', `最大讲解页码已更新到: ${pageNumber}`);
+            
+            // 更新按钮显示
+            updateExplainNextButton();
+        }
+    } catch (error) {
+        logger.error('Max Explained Page', '更新最大讲解页码失败:', error);
+    }
+}
+
+// 更新讲解下一页按钮的显示
+async function updateExplainNextButton() {
+    if (!currentFilePath || !currentFileMD5) {
+        explainNextText.textContent = '讲解第1页';
+        return;
+    }
+    
+    try {
+        const pageState = await ipcRenderer.invoke('load-page-state', currentFileMD5);
+        let maxExplained = pageState?.maxExplainedPage || 0;
+        
+        // 如果maxExplained为0且有当前页码，用当前页码作为初始值
+        if (maxExplained === 0 && currentPDFPage > 0) {
+            maxExplained = currentPDFPage;
+            logger.log('Explain Next Button', `初始化最大讲解页码为当前页: ${maxExplained}`);
+        }
+        
+        const nextPageToExplain = maxExplained + 1;
+        explainNextText.textContent = `讲解第${nextPageToExplain}页`;
+        
+        logger.log('Explain Next Button', `按钮文本已更新: 讲解${nextPageToExplain}页`);
+    } catch (error) {
+        logger.error('Explain Next Button', '更新按钮显示失败:', error);
+        explainNextText.textContent = '讲解1页';
+    }
+}
+
+// 直接从PDF文件中截取指定页面并进行讲解
+async function captureSpecificPageAndExplain(pageNumber, triggerButton = null) {
+    if (!currentFilePath) {
+        logger.warn('Capture Specific Page', '没有打开的PDF文件');
+        return;
+    }
+    
+    try {
+        logger.log('Capture Specific Page', `开始渲染第${pageNumber}页`);
+        
+        // 首先检查PDF是否已加载，如果没有则等待
+        const pdfReady = await leftWebview.executeJavaScript(`
+            (function() {
+                // 检查window.pdfDoc和window.totalPages
+                console.log('🔍 检查PDF状态 - pdfDoc:', !!window.pdfDoc, 'totalPages:', window.totalPages);
+                return !!(window.pdfDoc && window.totalPages && window.totalPages > 0);
+            })()
+        `);
+        
+        if (!pdfReady) {
+            logger.warn('Capture Specific Page', 'PDF尚未完全加载，等待加载完成...');
+            
+            // 等待PDF加载完成（最多等待10秒）
+            let retryCount = 0;
+            const maxRetries = 20; // 10秒
+            
+            while (retryCount < maxRetries) {
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                const isReady = await leftWebview.executeJavaScript(`
+                    (function() {
+                        console.log('🔍 重试检查PDF状态 - pdfDoc:', !!window.pdfDoc, 'totalPages:', window.totalPages);
+                        return !!(window.pdfDoc && window.totalPages && window.totalPages > 0);
+                    })()
+                `);
+                
+                if (isReady) {
+                    logger.log('Capture Specific Page', `PDF加载完成，重试次数: ${retryCount + 1}`);
+                    break;
+                }
+                
+                retryCount++;
+            }
+            
+            if (retryCount >= maxRetries) {
+                throw new Error('PDF加载超时，请稍后重试');
+            }
+        }
+        
+        // 通过leftWebview执行JavaScript在内存中渲染指定页面
+        const screenshot = await leftWebview.executeJavaScript(`
+            (async function() {
+                try {
+                    console.log('🎯 开始内存渲染第${pageNumber}页，PDF文档状态:', !!window.pdfDoc, '总页数:', window.totalPages);
+                    
+                    if (!window.pdfDoc) {
+                        throw new Error('PDF文档未加载');
+                    }
+                    
+                    if (${pageNumber} < 1 || ${pageNumber} > window.totalPages) {
+                        throw new Error('页码超出范围: ' + ${pageNumber} + ', 总页数: ' + window.totalPages);
+                    }
+                    
+                    console.log('📄 获取第' + ${pageNumber} + '页对象...');
+                    // 获取指定页面
+                    const page = await window.pdfDoc.getPage(${pageNumber});
+                    
+                    // 使用高质量缩放，确保文字清晰
+                    const scale = 2.5; 
+                    const viewport = page.getViewport({ scale });
+                    
+                    console.log('🖼️ 创建内存canvas，尺寸:', viewport.width, 'x', viewport.height);
+                    
+                    // 创建完全独立的内存canvas，不添加到DOM
+                    const offscreenCanvas = document.createElement('canvas');
+                    const context = offscreenCanvas.getContext('2d', { 
+                        alpha: false,
+                        willReadFrequently: true 
+                    });
+                    
+                    offscreenCanvas.width = viewport.width;
+                    offscreenCanvas.height = viewport.height;
+                    
+                    // 设置白色背景（防止透明）
+                    context.fillStyle = 'white';
+                    context.fillRect(0, 0, offscreenCanvas.width, offscreenCanvas.height);
+                    
+                    console.log('🚀 开始在内存中渲染页面...');
+                    
+                    // 在内存中渲染页面，完全不影响当前显示
+                    const renderTask = page.render({
+                        canvasContext: context,
+                        viewport: viewport,
+                        intent: 'display',
+                        renderInteractiveForms: false,
+                        optionalContentConfigPromise: null
+                    });
+                    
+                    await renderTask.promise;
+                    
+                    console.log('✅ 内存渲染完成，转换为高质量PNG...');
+                    
+                    // 转换为高质量PNG格式
+                    const dataUrl = offscreenCanvas.toDataURL('image/png', 1.0);
+                    
+                    console.log('📸 截图生成成功，数据长度:', dataUrl.length, '字符');
+                    console.log('📊 图片尺寸:', offscreenCanvas.width, 'x', offscreenCanvas.height);
+                    
+                    // 清理内存
+                    offscreenCanvas.width = 0;
+                    offscreenCanvas.height = 0;
+                    
+                    return dataUrl;
+                    
+                } catch (error) {
+                    console.error('❌ 内存渲染失败:', error);
+                    return 'ERROR:' + error.message;
+                }
+            })()
+        `);
+        
+        if (!screenshot) {
+            throw new Error('截图失败，返回空数据');
+        }
+        
+        if (typeof screenshot === 'string' && screenshot.startsWith('ERROR:')) {
+            throw new Error(screenshot.substring(6)); // 移除'ERROR:'前缀
+        }
+        
+        logger.log('Capture Specific Page', `第${pageNumber}页截图成功`);
+        
+        // 将DataURL转换为图片并保存到剪贴板
+        const { nativeImage } = require('electron');
+        const image = nativeImage.createFromDataURL(screenshot);
+        const clipboard = require('electron').clipboard;
+        clipboard.writeImage(image);
+        
+        logger.log('Capture Specific Page', `第${pageNumber}页截图已保存到剪贴板`);
+        
+        // 检查右侧ChatGPT页面
+        const currentUrl = rightWebview.getURL();
+        const isChatGPT = currentUrl.includes('chat.openai.com') || currentUrl.includes('chatgpt.com');
+        
+        if (isChatGPT) {
+            logger.log('Capture Specific Page', `正在将第${pageNumber}页截图发送到ChatGPT`);
+            
+            // 获取当前解释提示词
+            const currentPrompt = await getCurrentExplainPrompt();
+            logger.log('Capture Specific Page', '使用提示词:', currentPrompt);
+            
+            // 读取外部脚本文件
+            let pasteScript;
+            try {
+                pasteScript = fs.readFileSync(path.join(__dirname, 'pasteScript.js'), 'utf8');
+                // 替换占位符为实际的提示词
+                pasteScript = pasteScript.replace('PROMPT_PLACEHOLDER', currentPrompt);
+                
+                // 获取当前书名用于通知
+                let bookName = 'AI Book Reader';
+                if (currentFilePath && currentFileMD5) {
+                    try {
+                        const bookSettings = await ipcRenderer.invoke('load-book-settings', currentFileMD5);
+                        if (bookSettings && bookSettings.title && bookSettings.title.trim()) {
+                            bookName = bookSettings.title.trim();
+                        } else {
+                            // 使用文件名作为书名
+                            const fileName = path.basename(currentFilePath, path.extname(currentFilePath));
+                            bookName = fileName.length > 20 ? fileName.substring(0, 20) + '...' : fileName;
+                        }
+                    } catch (settingsError) {
+                        logger.warn('Capture Specific Page', '获取书名失败，使用文件名:', settingsError);
+                        const fileName = path.basename(currentFilePath, path.extname(currentFilePath));
+                        bookName = fileName.length > 20 ? fileName.substring(0, 20) + '...' : fileName;
+                    }
+                }
+                
+                // 替换书名占位符
+                pasteScript = pasteScript.replace('BOOK_NAME_PLACEHOLDER', bookName);
+                
+                logger.log('Capture Specific Page', '开始执行粘贴脚本');
+                const result = await rightWebview.executeJavaScript(pasteScript);
+                
+                // 处理执行结果
+                logger.log('Capture Specific Page', '脚本执行结果:', result);
+                if (result === 'success') {
+                    // 如果指定了触发按钮，显示成功动画
+                    if (triggerButton) {
+                        showButtonSuccessAnimation(triggerButton);
+                    }
+                    
+                    const successNotification = new Notification(`开始讲解第${pageNumber}页`, {
+                        body: '正在解读页面内容，完成后会通知您',
+                        silent: true
+                    });
+                    
+                    // 讲解成功，更新最大讲解页码
+                    await updateMaxExplainedPage(pageNumber);
+                    logger.log('Capture Specific Page', `第${pageNumber}页讲解成功，已更新最大讲解页码`);
+                } else {
+                    throw new Error(`脚本执行失败: ${result}`);
+                }
+                
+            } catch (error) {
+                logger.error('Capture Specific Page', 'ChatGPT脚本执行失败:', error);
+                const errorNotification = new Notification('讲解失败', {
+                    body: `第${pageNumber}页讲解失败: ${error.message}`,
+                    silent: true
+                });
+            }
+        } else {
+            logger.warn('Capture Specific Page', 'ChatGPT页面未加载，无法发送截图');
+            const notification = new Notification(`第${pageNumber}页截图完成`, {
+                body: '截图已保存到剪贴板，但ChatGPT页面未加载',
+                silent: true
+            });
+        }
+        
+    } catch (error) {
+        logger.error('Capture Specific Page', `第${pageNumber}页内存渲染失败:`, error);
+        const errorNotification = new Notification('截图失败', {
+            body: `第${pageNumber}页截图失败: ${error.message}`,
+            silent: true
+        });
+    }
+}
+
+
 
 // 保存右侧webview的URL（与当前PDF文件捆绑）
 async function saveRightWebviewURLForCurrentFile() {

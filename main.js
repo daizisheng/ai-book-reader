@@ -663,3 +663,4 @@ ipcMain.on('show-context-menu', (event, params) => {
     
     console.log('Context menu displayed');
 });
+
