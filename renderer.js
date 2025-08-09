@@ -986,8 +986,8 @@ smartButton.addEventListener('click', async () => {
             let pasteScript;
             try {
                 pasteScript = fs.readFileSync(path.join(__dirname, 'pasteScript.js'), 'utf8');
-                // 替换占位符为实际的提示词
-                pasteScript = pasteScript.replace('PROMPT_PLACEHOLDER', currentPrompt);
+                // 替换占位符为实际的提示词（安全地作为JSON字符串注入）
+                pasteScript = pasteScript.replace("'PROMPT_PLACEHOLDER'", JSON.stringify(currentPrompt));
                 
                 // 获取当前书名用于通知
                 let bookName = 'AI Book Reader';
@@ -1008,8 +1008,8 @@ smartButton.addEventListener('click', async () => {
                     }
                 }
                 
-                // 替换书名占位符
-                pasteScript = pasteScript.replace('BOOK_NAME_PLACEHOLDER', bookName);
+                // 替换书名占位符（安全地作为JSON字符串注入）
+                pasteScript = pasteScript.replace("'BOOK_NAME_PLACEHOLDER'", JSON.stringify(bookName));
                 logger.log('Smart Button', '将使用书名:', bookName);
             } catch (error) {
                 logger.error('Smart Button', '读取粘贴脚本失败:', error);
@@ -1868,8 +1868,8 @@ async function captureSpecificPageAndExplain(pageNumber, triggerButton = null) {
             let pasteScript;
             try {
                 pasteScript = fs.readFileSync(path.join(__dirname, 'pasteScript.js'), 'utf8');
-                // 替换占位符为实际的提示词
-                pasteScript = pasteScript.replace('PROMPT_PLACEHOLDER', currentPrompt);
+                // 替换占位符为实际的提示词（安全地作为JSON字符串注入）
+                pasteScript = pasteScript.replace("'PROMPT_PLACEHOLDER'", JSON.stringify(currentPrompt));
                 
                 // 获取当前书名用于通知
                 let bookName = 'AI Book Reader';
@@ -1890,8 +1890,8 @@ async function captureSpecificPageAndExplain(pageNumber, triggerButton = null) {
                     }
                 }
                 
-                // 替换书名占位符
-                pasteScript = pasteScript.replace('BOOK_NAME_PLACEHOLDER', bookName);
+                // 替换书名占位符（安全地作为JSON字符串注入）
+                pasteScript = pasteScript.replace("'BOOK_NAME_PLACEHOLDER'", JSON.stringify(bookName));
                 
                 logger.log('Capture Specific Page', '开始执行粘贴脚本');
                 const result = await rightWebview.executeJavaScript(pasteScript);
