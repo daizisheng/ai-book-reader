@@ -7,6 +7,7 @@
   "homepage": ".",
   "scripts": {
     "start": "electron .",
+    "with-proxy": "electron --proxy-server=socks5://127.0.0.1:9999 .",
     "dev": "electron . --enable-debug",
     "build": "electron-builder",
     "build:mac": "electron-builder --mac",
