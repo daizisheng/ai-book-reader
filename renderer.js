@@ -36,6 +36,7 @@ const prevPageButton = document.getElementById('prevPageButton');
 const nextPageButton = document.getElementById('nextPageButton');
 const explainNextButton = document.getElementById('explainNextButton');
 const explainNextText = document.getElementById('explainNextText');
+const nextPageExplainButton = document.getElementById('nextPageExplainButton');
 const colorModeButton = document.getElementById('colorModeButton');
 const bookTitleDisplay = document.getElementById('bookTitleDisplay');
 const bookAuthorDisplay = document.getElementById('bookAuthorDisplay');
@@ -891,6 +892,163 @@ explainNextButton.addEventListener('click', async () => {
     }
 });
 
+// 添加翻页并解读按钮功能
+nextPageExplainButton.addEventListener('click', async () => {
+    logger.log('Next Page Explain Button', '用户点击了翻页并解读按钮');
+    if (nextPageExplainButton.disabled) {
+        logger.log('Next Page Explain Button', '翻页并解读按钮被禁用，忽略点击');
+        return;
+    }
+    
+    // 检查是否有打开的文件
+    if (!currentFilePath) {
+        logger.warn('Next Page Explain Button', '没有打开的文件');
+        const notification = new Notification('请先打开书籍', {
+            body: '请先通过菜单打开一本书籍，然后再使用翻页并解读功能',
+            silent: true
+        });
+        return;
+    }
+    
+    try {
+        // 步骤1: 翻页
+        logger.log('Next Page Explain Button', '开始翻页...');
+        await nextPage();
+        
+        // 步骤2: 等待0.5秒
+        logger.log('Next Page Explain Button', '等待0.5秒...');
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // 步骤3: 截图并解读
+        logger.log('Next Page Explain Button', '开始截图并解读...');
+        
+        // 获取左侧面板的截图
+        const screenshot = await leftWebview.capturePage();
+        const size = screenshot.getSize();
+        logger.log('Next Page Explain Button', `截图成功，图片尺寸: ${size.width}x${size.height}`);
+        
+        // 将截图保存到剪贴板
+        const clipboard = require('electron').clipboard;
+        clipboard.writeImage(screenshot);
+        logger.log('Next Page Explain Button', '截图已成功保存到剪贴板');
+
+        // 等待右侧 ChatGPT 页面加载完成
+        const currentUrl = rightWebview.getURL();
+        logger.log('Next Page Explain Button', '当前右侧页面 URL:', currentUrl);
+        
+        // 检查是否是 ChatGPT 页面
+        const isChatGPT = currentUrl.includes('chat.openai.com') || currentUrl.includes('chatgpt.com');
+        
+        if (isChatGPT) {
+            logger.log('Next Page Explain Button', '正在将截图粘贴到 ChatGPT 输入框...');
+            
+            // 获取当前解释提示词
+            const currentPrompt = await getCurrentExplainPrompt();
+            logger.log('Next Page Explain Button', '使用提示词:', currentPrompt);
+            
+            // 读取外部脚本文件
+            let pasteScript;
+            try {
+                pasteScript = fs.readFileSync(path.join(__dirname, 'pasteScript.js'), 'utf8');
+                // 替换占位符为实际的提示词（安全地作为JSON字符串注入）
+                pasteScript = pasteScript.replace("'PROMPT_PLACEHOLDER'", JSON.stringify(currentPrompt));
+                
+                // 获取当前书名用于通知
+                let bookName = 'AI Book Reader';
+                if (currentFilePath && currentFileMD5) {
+                    try {
+                        const bookSettings = await ipcRenderer.invoke('load-book-settings', currentFileMD5);
+                        if (bookSettings && bookSettings.title && bookSettings.title.trim()) {
+                            bookName = bookSettings.title.trim();
+                        } else {
+                            // 使用文件名作为书名
+                            const fileName = path.basename(currentFilePath);
+                            bookName = fileName.replace(/\.[^/.]+$/, ''); // 移除扩展名
+                        }
+                    } catch (error) {
+                        logger.warn('Next Page Explain Button', '获取书名失败，使用默认名称:', error);
+                    }
+                }
+                
+                // 替换书名占位符（安全地作为JSON字符串注入）
+                pasteScript = pasteScript.replace("'BOOK_NAME_PLACEHOLDER'", JSON.stringify(bookName));
+                logger.log('Next Page Explain Button', '将使用书名:', bookName);
+            } catch (error) {
+                logger.error('Next Page Explain Button', '读取粘贴脚本失败:', error);
+                throw new Error('无法加载粘贴脚本');
+            }
+            
+            // 执行脚本
+            const result = await rightWebview.executeJavaScript(pasteScript);
+            logger.log('Next Page Explain Button', '脚本执行结果:', result);
+            
+            // 根据不同的结果显示相应的通知
+            switch (result) {
+                case 'success':
+                    logger.log('Next Page Explain Button', '翻页并解读流程成功完成');
+                    
+                    // 显示翻页并解读按钮的成功动画
+                    showButtonSuccessAnimation(nextPageExplainButton);
+                    
+                    // 成功完成，等待解读完成通知
+                    const successNotification = new Notification('AI讲解已完成', {
+                        body: '第' + currentPDFPage + '页讲解已完成',
+                        silent: true
+                    });
+                    
+                    // 讲解成功，更新最大讲解页码
+                    await updateMaxExplainedPage(currentPDFPage);
+                    return;
+                    
+                case 'ai_working':
+                    logger.log('Next Page Explain Button', 'AI正在工作中');
+                    const workingNotification = new Notification('AI正在工作', {
+                        body: 'AI正在处理中，请稍等...',
+                        silent: true
+                    });
+                    return;
+                    
+                case 'voice_mode':
+                    logger.log('Next Page Explain Button', '检测到语音模式');
+                    const voiceNotification = new Notification('检测到语音模式', {
+                        body: '请切换到文本模式后再试',
+                        silent: true
+                    });
+                    return;
+                    
+                case 'unknown_state':
+                    logger.log('Next Page Explain Button', '未知状态');
+                    const unknownNotification = new Notification('未知状态', {
+                        body: '无法识别ChatGPT当前状态，请刷新页面后重试',
+                        silent: true
+                    });
+                    return;
+                    
+                default:
+                    logger.error('Next Page Explain Button', '脚本执行返回未知结果:', result);
+                    const errorNotification = new Notification('执行失败', {
+                        body: '翻页并解读流程执行失败，请重试',
+                        silent: true
+                    });
+                    return;
+            }
+        } else {
+            logger.warn('Next Page Explain Button', '右侧不是ChatGPT页面，请先打开ChatGPT');
+            const notification = new Notification('请先打开ChatGPT', {
+                body: '请先在右侧面板打开ChatGPT页面，然后再使用翻页并解读功能',
+                silent: true
+            });
+        }
+        
+    } catch (error) {
+        logger.error('Next Page Explain Button', '翻页并解读失败:', error);
+        const errorNotification = new Notification('翻页并解读失败', {
+            body: '翻页并解读过程中发生错误: ' + error.message,
+            silent: true
+        });
+    }
+});
+
 // 添加颜色模式切换功能
 colorModeButton.addEventListener('click', async () => {
     logger.log('Color Mode Button', '用户点击了颜色模式按钮');
@@ -1213,6 +1371,7 @@ function updateButtonStates() {
     prevPageButton.disabled = !hasFile;
     nextPageButton.disabled = !hasFile;
     explainNextButton.disabled = !hasFile;
+    nextPageExplainButton.disabled = !hasFile;
     colorModeButton.disabled = !hasFile;
     // 布局输入框始终可用
     layoutInput.disabled = false;
@@ -1225,6 +1384,7 @@ function updateButtonStates() {
         prevPageButton.style.opacity = '1';
         nextPageButton.style.opacity = '1';
         explainNextButton.style.opacity = '1';
+        nextPageExplainButton.style.opacity = '1';
         colorModeButton.style.opacity = '1';
         smartButton.style.cursor = 'pointer';
         settingsButton.style.cursor = 'pointer';
@@ -1232,6 +1392,7 @@ function updateButtonStates() {
         prevPageButton.style.cursor = 'pointer';
         nextPageButton.style.cursor = 'pointer';
         explainNextButton.style.cursor = 'pointer';
+        nextPageExplainButton.style.cursor = 'pointer';
         colorModeButton.style.cursor = 'pointer';
     } else {
         smartButton.style.opacity = '0.5';
@@ -1240,6 +1401,7 @@ function updateButtonStates() {
         prevPageButton.style.opacity = '0.5';
         nextPageButton.style.opacity = '0.5';
         explainNextButton.style.opacity = '0.5';
+        nextPageExplainButton.style.opacity = '0.5';
         colorModeButton.style.opacity = '0.5';
         smartButton.style.cursor = 'not-allowed';
         settingsButton.style.cursor = 'not-allowed';
@@ -1247,6 +1409,7 @@ function updateButtonStates() {
         prevPageButton.style.cursor = 'not-allowed';
         nextPageButton.style.cursor = 'not-allowed';
         explainNextButton.style.cursor = 'not-allowed';
+        nextPageExplainButton.style.cursor = 'not-allowed';
         colorModeButton.style.cursor = 'not-allowed';
         // 布局输入框始终可用
         layoutInput.style.opacity = '1';
@@ -1273,6 +1436,7 @@ function updateButtonStates() {
         prevPageDisabled: !hasFile,
         nextPageDisabled: !hasFile,
         explainNextDisabled: !hasFile,
+        nextPageExplainDisabled: !hasFile,
         colorModeDisabled: !hasFile,
         currentPage: currentPDFPage
     });
